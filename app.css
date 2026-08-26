@@ -472,6 +472,34 @@ kbd {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
+.pickrow.action {
+  color: var(--accent);
+}
+
+.pickrow.empty {
+  color: var(--dim);
+  cursor: default;
+  font-style: italic;
+}
+
+.pcheck {
+  width: 1em;
+  flex: none;
+  color: var(--good);
+}
+
+.prowhint {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pfilter {
+  color: var(--accent);
+  font-weight: 400;
+}
+
 .askbar {
   display: flex;
   align-items: center;

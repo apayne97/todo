@@ -32,7 +32,7 @@ const KEYMAP = [
     ["s", "set scheduled date"],
     ["d", "set due date"],
     ["r", "set repeat (+1w / .3d)"],
-    ["b", "set blocker (needs:)"],
+    ["b", "manage blockers — pick a task or add one"],
     ["P", "set project (or make a new one)"],
     ["Tab / Shift-Tab", "indent / outdent as subtask"],
     ["e / Enter", "edit the title"],
@@ -273,7 +273,14 @@ function viewMatch(it, view, t, we) {
   if (view === "upcoming") return (s && s > we) || (!s && d && d > we);
   if (view === "inbox") return !s && !d && !it.isBlocked;
   if (view === "review")
-    return (s && s < t) || (it.bumps || 0) >= 1 || (!s && !d) || it._dangling.length > 0 || it._cycle;
+    return (
+      (s && s < t) ||
+      (it.bumps || 0) >= 1 ||
+      (!s && !d) ||
+      it.isBlocked ||
+      it._dangling.length > 0 ||
+      it._cycle
+    );
   return false;
 }
 
@@ -286,10 +293,12 @@ function visibleRoots() {
   const we = P.weekEndISO(t);
   const roots = P.buildTrees(state.model.items);
   const q = state.search.toLowerCase();
+  // the item being edited stays visible regardless of the current filters
+  const editing = (r) => state.editing && anyDesc(r, (x) => x.id === state.editing.id);
   return roots
-    .filter((r) => anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
-    .filter((r) => !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
-    .filter((r) => !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
+    .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
+    .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
+    .filter((r) => editing(r) || !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || (b.bumps || 0) - (a.bumps || 0));
 }
 
@@ -359,7 +368,7 @@ function rowEl(it) {
       }
     };
     inp.onblur = () => {
-      if (state.editing) commitEdit(it, inp.value, state.editing.mode);
+      if (!RENDERING && state.editing) commitEdit(it, inp.value, state.editing.mode);
     };
     row.append(inp);
     state._focusEl = inp;
@@ -833,8 +842,11 @@ function keymapEl() {
 
 // ---------- shell ----------
 
+let RENDERING = false;
+
 function render() {
   const app = $("#app");
+  RENDERING = true; // tearing down the DOM blurs the edit input — don't treat that as a commit
   app.innerHTML = "";
   state._focusEl = null;
 
@@ -919,6 +931,7 @@ function render() {
     app.append(tt);
   }
 
+  RENDERING = false;
   if (state._focusEl) state._focusEl.focus();
   else if (state.ask) $(".ask input, .ask textarea")?.focus();
 }
@@ -977,31 +990,70 @@ function askText(label, initial, onSubmit) {
   render();
 }
 
-function openPicker(title, options, hi, onPick) {
-  state.picker = { title, options, hi: Math.max(0, hi), onPick };
+// opts: { filterable, keepOpen, rebuild }
+//  - filterable: type to narrow the list (arrows move, not j/k)
+//  - keepOpen: onPick returning anything but an explicit close keeps the picker up
+//  - rebuild: () => options, called after each pick to refresh checkmarks
+function openPicker(title, options, hi, onPick, opts = {}) {
+  state.picker = { title, options, hi: Math.max(0, hi), onPick, filter: "", ...opts };
   render();
 }
 
-function choosePicker(i) {
+function pickerVisible() {
   const p = state.picker;
-  if (!p) return;
-  const o = p.options[i];
-  state.picker = null;
-  if (o) p.onPick(o.value);
+  if (!p) return [];
+  if (!p.filterable || !p.filter) return p.options;
+  const q = p.filter.toLowerCase();
+  return p.options.filter((o) => o.always || o.label.toLowerCase().includes(q));
+}
+
+function choosePicker(opt) {
+  const p = state.picker;
+  if (!p || !opt) return;
+  const res = p.onPick(opt.value, opt);
+  if (res === "close" || (!p.keepOpen && res !== false)) {
+    state.picker = null;
+  } else if (p.rebuild) {
+    p.options = p.rebuild();
+    if (p.hi >= pickerVisible().length) p.hi = Math.max(0, pickerVisible().length - 1);
+  }
   render();
 }
 
 function pickerEl() {
+  const p = state.picker;
   const wrap = document.createElement("div");
   wrap.className = "ask";
   const box = document.createElement("div");
   box.className = "askbox";
-  box.innerHTML = `<label>${state.picker.title}</label>`;
+  const lbl = document.createElement("label");
+  lbl.textContent = p.title;
+  if (p.filterable) {
+    const f = document.createElement("span");
+    f.className = "pfilter";
+    f.textContent = p.filter ? ` ›  ${p.filter}` : "  (type to filter)";
+    lbl.append(f);
+  }
+  box.append(lbl);
+
   const list = document.createElement("div");
   list.className = "picklist";
-  state.picker.options.forEach((o, i) => {
+  const vis = pickerVisible();
+  if (!vis.length) {
+    const e = document.createElement("div");
+    e.className = "pickrow empty";
+    e.textContent = "no matches";
+    list.append(e);
+  }
+  vis.forEach((o, i) => {
     const row = document.createElement("div");
-    row.className = "pickrow" + (i === state.picker.hi ? " hi" : "");
+    row.className = "pickrow" + (i === p.hi ? " hi" : "") + (o.action ? " action" : "");
+    if (o.checked != null) {
+      const c = document.createElement("span");
+      c.className = "pcheck";
+      c.textContent = o.checked ? "✓" : "";
+      row.append(c);
+    }
     if (o.dot) {
       const d = document.createElement("span");
       d.className = "dot";
@@ -1009,17 +1061,26 @@ function pickerEl() {
       row.append(d);
     }
     row.append(document.createTextNode(o.label));
+    if (o.hint) {
+      const h = document.createElement("span");
+      h.className = "prowhint";
+      h.textContent = o.hint;
+      row.append(h);
+    }
     row.onmouseenter = () => {
-      state.picker.hi = i;
+      p.hi = i;
       render();
     };
-    row.onclick = () => choosePicker(i);
+    row.onclick = () => choosePicker(o);
     list.append(row);
   });
   box.append(list);
+
   const hint = document.createElement("p");
   hint.className = "hint";
-  hint.textContent = "↑↓ or j/k · Enter to choose · Esc to cancel";
+  hint.textContent = p.filterable
+    ? "type to filter · ↑↓ move · Enter choose · Esc close"
+    : "↑↓ or j/k · Enter choose · Esc close";
   box.append(hint);
   wrap.append(box);
   wrap.onclick = (e) => {
@@ -1101,6 +1162,71 @@ function addItem(mode) {
   });
 }
 
+// Create a new task linked to `sel` by a dependency, then edit its title.
+//   "blocking"  → new task must be done first (sel needs it), inserted before sel
+//   "dependent" → new task waits on sel (it needs sel), inserted after sel's subtree
+function createLinkedItem(sel, direction) {
+  mutate(() => {
+    const items = state.model.items;
+    const it = P.parse("- [ ] new").items[0];
+    it.title = "";
+    it.created = todayISO();
+    it.depth = sel.depth;
+    const [i, end] = subtreeRange(sel);
+    items.splice(direction === "blocking" ? i : end, 0, it);
+    if (state.view === "today" || state.view === "week") it.sched = todayISO();
+    if (state.projectFilter) it.projects = [state.projectFilter];
+    else if (sel.projects.length) it.projects = [sel.projects[0]];
+    P.ensureIds(items);
+    if (direction === "blocking") sel.needs.push(it.id);
+    else it.needs.push(sel.id);
+    state.selectedId = it.id;
+    state.editing = { id: it.id, mode: "title" };
+  });
+}
+
+// `b` — manage what blocks the selected item: toggle existing open tasks, or
+// spin up a new blocking / dependent task. No ids to remember.
+function openBlockerPicker(sel) {
+  const build = () => [
+    { value: "new-blocking", label: "＋ new task that blocks this", action: true, always: true },
+    { value: "new-dependent", label: "＋ new task that depends on this", action: true, always: true },
+    ...state.model.items
+      .filter((it) => it.id && it.id !== sel.id && !it.done)
+      .map((it) => ({
+        value: it.id,
+        label: it.title || "(untitled)",
+        dot: it.projects[0] ? projColor(it.projects[0]) : null,
+        hint: it.projects[0] ? "+" + it.projects[0] : "",
+        checked: sel.needs.includes(it.id),
+      })),
+  ];
+  openPicker(
+    `Blockers for "${sel.title || "untitled"}"`,
+    build(),
+    0,
+    (value) => {
+      if (value === "new-blocking") {
+        state.picker = null;
+        createLinkedItem(sel, "blocking");
+        return "close";
+      }
+      if (value === "new-dependent") {
+        state.picker = null;
+        createLinkedItem(sel, "dependent");
+        return "close";
+      }
+      mutate(() => {
+        const at = sel.needs.indexOf(value);
+        if (at >= 0) sel.needs.splice(at, 1);
+        else sel.needs.push(value);
+      });
+      return false; // keep the picker open for more toggles
+    },
+    { filterable: true, keepOpen: true, rebuild: build }
+  );
+}
+
 function reorder(it, dir) {
   const items = state.model.items;
   const [i, e] = subtreeRange(it);
@@ -1151,21 +1277,37 @@ document.addEventListener("keydown", (e) => {
   if (k.length === 1 && k !== " " && !e.metaKey && !e.ctrlKey && !e.altKey) e.preventDefault();
 
   if (state.picker) {
-    const n = state.picker.options.length;
+    const p = state.picker;
+    const vis = pickerVisible();
+    const n = Math.max(1, vis.length);
     if (k === "Escape") {
       state.picker = null;
       return render();
     }
-    if (k === "j" || k === "ArrowDown") {
-      state.picker.hi = (state.picker.hi + 1) % n;
+    if (k === "Enter") return choosePicker(vis[p.hi]);
+    if (k === "ArrowDown" || (!p.filterable && k === "j")) {
+      p.hi = (p.hi + 1) % n;
       return render();
     }
-    if (k === "k" || k === "ArrowUp") {
-      state.picker.hi = (state.picker.hi - 1 + n) % n;
+    if (k === "ArrowUp" || (!p.filterable && k === "k")) {
+      p.hi = (p.hi - 1 + n) % n;
       return render();
     }
-    if (k === "Enter") return choosePicker(state.picker.hi);
-    if (/^[1-9]$/.test(k) && Number(k) <= n) return choosePicker(Number(k) - 1);
+    if (p.filterable) {
+      if (k === "Backspace") {
+        p.filter = p.filter.slice(0, -1);
+        p.hi = 0;
+        return render();
+      }
+      if (k.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        p.filter += k;
+        p.hi = 0;
+        return render();
+      }
+      return;
+    }
+    if (/^[1-9]$/.test(k) && Number(k) <= vis.length) return choosePicker(vis[Number(k) - 1]);
     return;
   }
 
@@ -1285,10 +1427,7 @@ document.addEventListener("keydown", (e) => {
       const rep = parseRepeat(v);
       if (rep !== undefined) mutate(() => (sel.repeat = rep));
     });
-  if (k === "b")
-    return ask("blocked by (item ids, comma-separated)", sel.needs.join(","), (v) =>
-      mutate(() => (sel.needs = v.split(",").map((s) => s.trim()).filter(Boolean)))
-    );
+  if (k === "b") return openBlockerPicker(sel);
   if (k === "P") {
     const opts = [
       { value: "", label: "(no project)" },

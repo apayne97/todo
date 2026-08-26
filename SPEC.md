@@ -86,10 +86,17 @@ Two mechanisms, matched to the two shapes dependencies take:
    `n/m` progress until all children are checked. Children inherit the parent's
    `+project` unless they set their own.
 2. **`needs:`** — cross-cutting links between non-nested items. App resolves ids
-   to titles for display, warns on dangling refs and cycles, and surfaces an item
-   in **Review** the moment its last blocker clears.
+   to titles for display and warns on dangling refs and cycles.
 
-Blocked items render dimmed with 🔒 and are hidden from Today (toggle to reveal).
+**Managing blockers** — press `b` on an item to open a picker: type to filter the
+list of open tasks, Enter/click toggles one on or off as a blocker (✓), no ids to
+remember. Two entries at the top spin up a *new* task and wire the link:
+**"new task that blocks this"** (inserted before, this item `needs:` it) and
+**"new task that depends on this"** (inserted after, it `needs:` this item) — both
+drop straight into title-edit, inheriting project and the current view's date.
+
+Blocked items render dimmed with 🔒, are hidden from Today / This Week / Inbox, and
+always show in **Review**.
 
 ### Recurring — behavior on check-off
 
@@ -110,7 +117,7 @@ Blocked items render dimmed with 🔒 and are hidden from Today (toggle to revea
 | 3 | Upcoming   | dated beyond this week                                                |
 | 4 | Inbox      | no `sched`, no `due`                                                  |
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
-| 6 | Review     | overdue + `bumps ≥ 1` + Inbox + just-unblocked                        |
+| 6 | Review     | overdue + `bumps ≥ 1` + Inbox + blocked + dangling/cycle refs         |
 | 7 | Projects   | one card per project: description, info, live task counts             |
 | 8 | Shortcuts  | full keyboard reference                                               |
 
