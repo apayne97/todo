@@ -1,0 +1,11 @@
+{
+  "name": "todo",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Local keyboard-driven todo app over a plain-text Markdown ground truth",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  }
+}
