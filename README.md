@@ -7,11 +7,11 @@ The app is just a fast view over it. Full design notes in [SPEC.md](SPEC.md).
 ## Run
 
 ```bash
-cd life-management/todo && npm start
+cd ~/life/todo && npm start
 ```
 
-Then open <http://localhost:4444>. In Claude Code you can also `preview_start` the
-`todo` launch config.
+Then open <http://localhost:4444>. In Claude Code (from the `pantheon` repo) you
+can also `preview_start` the `todo` launch config.
 
 Set `TODO_AUTOCOMMIT=1` to have the server `git commit` `todos.md` a few seconds
 after each change:

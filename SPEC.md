@@ -16,7 +16,7 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 
 ## Architecture
 
-- **Ground truth:** `life-management/todo/todos.md`. Overflow archive (later): `todos-archive.md`.
+- **Ground truth:** `todos.md` in this repo (`~/life/todo`). Overflow archive (later): `todos-archive.md`.
 - **App:** single static `index.html` + `app.js` + `app.css`, no build step.
 - **Server:** ~30-line Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
