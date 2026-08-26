@@ -52,13 +52,23 @@ One task per line. Free text first, then space-separated tokens:
 
 Completed tasks move under `## Done`. Unknown tokens are preserved untouched.
 
-Project descriptions and info go in a `## Projects` section at the end:
+An item can also carry a `link:` line (a URL, rendered as a clickable chip) and a
+freeform note line, both indented under it:
+
+```markdown
+- [ ] apply to the job +hunt due:2026-09-01
+  link: https://careers.example.com/req/123
+  ping the recruiter first
+```
+
+Project descriptions, info, and a link go in a `## Projects` section at the end:
 
 ```markdown
 ## Projects
 
 ### grant
 NIH R01 renewal. First draft to OSP by March 1.
+link: https://notion.so/grant-board
 status: drafting
 ```
 
@@ -69,7 +79,7 @@ Edit them on the Projects view (`7`).
 Press `?` in the app for the full list, or open the Shortcuts view (`8`).
 Highlights: `j`/`k` move, `x` done, `T` today, `t` tomorrow, `w` bump to next
 Monday, `s`/`d` set dates, `e` edit title, `E` edit the whole line, `n` note,
-`P` set project, `p` project filter, `a` add, `c` quick-capture, `u` undo.
+`l` link, `P` set project, `p` project filter, `a` add, `c` quick-capture, `u` undo.
 
 ## Tests
 

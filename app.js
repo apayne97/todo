@@ -38,6 +38,7 @@ const KEYMAP = [
     ["e / Enter", "edit the title"],
     ["E", "edit the whole line (tokens)"],
     ["n", "edit the note"],
+    ["l", "edit the link (URL)"],
     ["J / K", "reorder"],
     ["#  or  Delete", "delete"],
     ["u", "undo"],
@@ -50,6 +51,7 @@ const KEYMAP = [
   ["Projects view", [
     ["e / Enter", "edit description"],
     ["n", "edit info (key: value lines)"],
+    ["l", "edit link (URL)"],
     ["a", "new project"],
   ]],
 ];
@@ -224,28 +226,39 @@ function projectEntry(name) {
 function ensureProjectEntry(name) {
   let e = projectEntry(name);
   if (!e) {
-    e = { name, desc: "", meta: [] };
+    e = { name, desc: "", meta: [], link: "" };
     state.model.projects.push(e);
   }
+  if (e.link == null) e.link = "";
   return e;
 }
 
 // name + description + info + live task counts, for the Projects view
 function projectSummaries() {
   return allProjects().map((name) => {
-    const e = projectEntry(name) || { name, desc: "", meta: [] };
+    const e = projectEntry(name) || { name, desc: "", meta: [], link: "" };
     const mine = state.model.items.filter((it) => it.projects.includes(name));
     const open = mine.filter((i) => !i.done);
     return {
       name,
       desc: e.desc,
       meta: e.meta,
+      link: e.link || "",
       open: open.length,
       done: mine.filter((i) => i.done).length,
       blocked: open.filter((i) => i.isBlocked).length,
       nextDue: open.filter((i) => i.due).map((i) => i.due).sort()[0] || null,
     };
   });
+}
+
+function editProjectLink(name) {
+  const e = projectEntry(name) || { link: "" };
+  ask(`${name} — link (URL, blank to clear)`, e.link || "", (v) =>
+    mutate(() => {
+      ensureProjectEntry(name).link = v.trim();
+    })
+  );
 }
 
 // ---------- filtering ----------
@@ -374,6 +387,7 @@ function rowEl(it) {
     row.append(chip("🔒", "lock", "blocked by: " + names.join(", ")));
   }
   if (it._dangling.length) row.append(chip("needs?", "warn", "unknown ids: " + it._dangling.join(", ")));
+  if (it.link) row.append(linkChip(it.link));
   const noteText = getNote(it);
   if (noteText) {
     const note = document.createElement("div");
@@ -402,6 +416,31 @@ function editNote(it) {
       it.notes = v.trim() ? [v.trim()] : [];
     })
   );
+}
+
+function editLink(it) {
+  ask("link — a URL (blank to clear)", it.link || "", (v) =>
+    mutate(() => {
+      it.link = v.trim() || null;
+    })
+  );
+}
+
+function linkText(url) {
+  return url.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "");
+}
+
+// a clickable 🔗 chip; clicking the label opens the URL, not the row
+function linkChip(url) {
+  const a = document.createElement("a");
+  a.className = "chip link";
+  a.textContent = "🔗 " + linkText(url);
+  a.href = /^[a-z][\w+.-]*:/i.test(url) ? url : "https://" + url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.title = url;
+  a.onclick = (e) => e.stopPropagation();
+  return a;
 }
 
 // Turn "due:fri" / "sched:tomorrow" inside a typed line into ISO dates.
@@ -655,7 +694,7 @@ function renderProjects(main) {
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
-  hint.textContent = "e edit description · n edit info · a new project · click name to filter";
+  hint.textContent = "e description · n info · l link · a new project · click name to filter";
   main.append(hint);
 
   if (!rows.length) {
@@ -712,6 +751,13 @@ function renderProjects(main) {
     };
     card.append(desc);
 
+    if (p.link) {
+      const lw = document.createElement("div");
+      lw.className = "plink";
+      lw.append(linkChip(p.link));
+      card.append(lw);
+    }
+
     if (p.meta.length) {
       const meta = document.createElement("dl");
       meta.className = "pmeta";
@@ -742,7 +788,8 @@ function editProjectMeta(name) {
   const initial = e.meta.map(([k, v]) => `${k}: ${v}`).join("\n");
   askText(`${name} — info (one "key: value" per line)`, initial, (v) =>
     mutate(() => {
-      ensureProjectEntry(name).meta = v
+      const ent = ensureProjectEntry(name);
+      const pairs = v
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean)
@@ -750,6 +797,10 @@ function editProjectMeta(name) {
           const m = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(l);
           return m ? [m[1], m[2]] : ["note", l];
         });
+      // a "link:" line here becomes the project's link, not a meta row
+      const linkPair = pairs.find(([k]) => k.toLowerCase() === "link");
+      if (linkPair) ent.link = linkPair[1];
+      ent.meta = pairs.filter(([k]) => k.toLowerCase() !== "link");
     })
   );
 }
@@ -1156,7 +1207,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (k === "G") return selectEdge(1);
 
-  if (state.view === "projects" && ["e", "Enter", "n", "a"].includes(k)) {
+  if (state.view === "projects" && ["e", "Enter", "n", "l", "a"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -1166,6 +1217,7 @@ document.addEventListener("keydown", (e) => {
       });
     if (!state.selectedId) return;
     if (k === "n") return editProjectMeta(state.selectedId);
+    if (k === "l") return editProjectLink(state.selectedId);
     return editProjectDesc(state.selectedId);
   }
 
@@ -1258,6 +1310,7 @@ document.addEventListener("keydown", (e) => {
     return render();
   }
   if (k === "n") return editNote(sel);
+  if (k === "l") return editLink(sel);
   if (k === "J") {
     e.preventDefault();
     return mutate(() => reorder(sel, 1));

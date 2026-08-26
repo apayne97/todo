@@ -113,8 +113,11 @@ function blankItem(depth, done) {
     id: null,
     extra: [], // unknown tokens, preserved verbatim
     notes: [],
+    link: null, // a single URL, stored on its own "link: …" line
   };
 }
+
+const LINK_RE = /^link:\s+(\S+)$/i;
 
 const TOKEN_TESTS = [
   /^\+[\w-]+$/,
@@ -201,11 +204,13 @@ export function parse(text) {
     if (section === "projects") {
       const ph = /^###\s+(.+?)\s*$/.exec(line);
       if (ph) {
-        curProject = { name: ph[1].trim(), desc: [], meta: [] };
+        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null };
         projects.push(curProject);
         continue;
       }
       if (!curProject || line.trim() === "") continue;
+      const pl = LINK_RE.exec(line.trim());
+      if (pl) { if (!curProject.link) curProject.link = pl[1]; continue; }
       const kv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
       if (kv) curProject.meta.push([kv[1], kv[2]]);
       else curProject.desc.push(line.trim());
@@ -222,7 +227,12 @@ export function parse(text) {
       seenItem = true;
       continue;
     }
-    if (cur && line.trim() !== "") { cur.notes.push(line.replace(/^\s+/, "")); continue; }
+    if (cur && line.trim() !== "") {
+      const il = LINK_RE.exec(line.trim());
+      if (il && !cur.link) { cur.link = il[1]; continue; }
+      cur.notes.push(line.replace(/^\s+/, ""));
+      continue;
+    }
     if (!seenItem && line.trim() !== "") preamble.push(line);
   }
 
@@ -231,7 +241,12 @@ export function parse(text) {
   return {
     items,
     preamble,
-    projects: projects.map((p) => ({ name: p.name, desc: p.desc.join("\n"), meta: p.meta })),
+    projects: projects.map((p) => ({
+      name: p.name,
+      desc: p.desc.join("\n"),
+      meta: p.meta,
+      link: p.link || "",
+    })),
   };
 }
 
@@ -274,6 +289,7 @@ export function serialize(model) {
   const emit = (it) => {
     const ind = "  ".repeat(it.depth);
     out.push(`${ind}- [${it.done ? "x" : " "}] ${itemBody(it)}`.trimEnd());
+    if (it.link) out.push(`${ind}  link: ${it.link}`);
     for (const n of it.notes) out.push(`${ind}  ${n}`);
     for (const c of it.children) emit(c);
   };
@@ -283,7 +299,9 @@ export function serialize(model) {
   out.push("");
   for (const r of done) emit(r);
 
-  const projects = (model.projects || []).filter((p) => p.name && (p.desc.trim() || p.meta.length));
+  const projects = (model.projects || []).filter(
+    (p) => p.name && (p.desc.trim() || p.meta.length || (p.link || "").trim())
+  );
   if (projects.length) {
     out.push("");
     out.push("## Projects");
@@ -291,6 +309,7 @@ export function serialize(model) {
     for (const p of projects) {
       out.push(`### ${p.name}`);
       if (p.desc.trim()) out.push(p.desc.trim());
+      if ((p.link || "").trim()) out.push(`link: ${p.link.trim()}`);
       for (const [k, v] of p.meta) out.push(`${k}: ${v}`);
       out.push("");
     }

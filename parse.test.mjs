@@ -111,8 +111,45 @@ test("round-trips a Projects section", () => {
 
 test("empty project entries are pruned on serialize", () => {
   const model = P.parse("# Todos\n\n- [ ] x id:a1\n\n## Done\n");
-  model.projects.push({ name: "ghost", desc: "", meta: [] });
+  model.projects.push({ name: "ghost", desc: "", meta: [], link: "" });
   assert.doesNotMatch(P.serialize(model), /ghost/);
+});
+
+test("link: lines round-trip on items and projects", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [ ] apply to the job +hunt id:j1",
+    "  link: https://careers.example.com/req/123",
+    "  ping the recruiter first",
+    "",
+    "## Done",
+    "",
+    "## Projects",
+    "",
+    "### hunt",
+    "The job search.",
+    "link: https://notion.so/hunt-board",
+    "status: active",
+    "",
+  ].join("\n");
+  const model = P.parse(src);
+  assert.equal(model.items[0].link, "https://careers.example.com/req/123");
+  assert.deepEqual(model.items[0].notes, ["ping the recruiter first"]);
+  assert.equal(model.projects[0].link, "https://notion.so/hunt-board");
+  assert.deepEqual(model.projects[0].meta, [["status", "active"]]);
+  const again = P.parse(P.serialize(model));
+  assert.equal(again.items[0].link, "https://careers.example.com/req/123");
+  assert.deepEqual(again.items[0].notes, ["ping the recruiter first"]);
+  assert.equal(again.projects[0].link, "https://notion.so/hunt-board");
+});
+
+test("a project with only a link still serializes", () => {
+  const model = P.parse("# Todos\n\n- [ ] x +proj id:a1\n\n## Done\n");
+  model.projects.push({ name: "proj", desc: "", meta: [], link: "https://x.com" });
+  const out = P.serialize(model);
+  assert.match(out, /### proj/);
+  assert.match(out, /link: https:\/\/x\.com/);
 });
 
 test("parent completes when all children are checked", () => {

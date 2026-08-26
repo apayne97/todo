@@ -49,9 +49,13 @@ Done graph tells a recurring completion from a one-off.
 
 ```
 - [ ] <title text> <token> <token> ...
-      <indented non-checkbox lines = freeform notes, preserved verbatim>
+  link: <a URL>                      (optional, one per item — edit with `l`)
+      <other indented non-checkbox lines = freeform note, edit with `n`)
   - [ ] <subtask> <token> ...
 ```
+
+An item (and a project) can carry one `link:` line — a hyperlink, rendered as a
+clickable 🔗 chip. It's stored like the note but held separately.
 
 ### Tokens
 
@@ -155,9 +159,9 @@ tags it with that project automatically; `P` on any item sets its project (with 
 `b` set blocker (`needs:`) · `P` set project (or make a new one) ·
 `Tab`/`Shift-Tab` indent/outdent as subtask ·
 `e`/`Enter` edit title · `E` edit the whole line · `n` edit the note ·
-`J`/`K` reorder · `#` delete · `u` undo
+`l` edit the link · `J`/`K` reorder · `#` delete · `u` undo
 
-**Projects view:** `e`/`Enter` edit description · `n` edit info · `a` new project
+**Projects view:** `e`/`Enter` edit description · `n` edit info · `l` edit link · `a` new project
 
 **Create:** `a` add in current context (prefills e.g. `sched:today` in Today) ·
 `A` add to Inbox · `c` quick-capture (global)

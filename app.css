@@ -270,6 +270,24 @@ header h1 {
   color: var(--dim);
 }
 
+a.chip.link {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+a.chip.link:hover {
+  background: var(--panel2);
+}
+
+.plink {
+  margin-top: 6px;
+}
+
 .empty {
   color: var(--dim);
   padding: 24px 16px;
