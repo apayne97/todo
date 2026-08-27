@@ -10,8 +10,14 @@ The app is just a fast view over it. Full design notes in [SPEC.md](SPEC.md).
 cd ~/life/todo && npm start
 ```
 
-Then open <http://localhost:4444>. In Claude Code (from the `pantheon` repo) you
-can also `preview_start` the `todo` launch config — that runs with `TODO_AUTOPUSH=1`.
+Then open <http://localhost:4444>.
+
+**Always-on (and phone access):** [`deploy/com.apayne.todo.plist`](deploy/com.apayne.todo.plist)
+is a launchd agent that keeps the server running whenever you're logged in
+(`TODO_AUTOPUSH=1`). Install per the comment at the top of that file. With
+Tailscale, the phone reaches it at `http://<mac-name>:4444` from anywhere; add to
+the home screen for an app-like shell. The `pantheon` `preview_start todo` config
+just attaches to the running server.
 
 **Autosave to git:**
 
