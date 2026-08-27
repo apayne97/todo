@@ -216,6 +216,16 @@ selected one · `D` new task that depends on it
 straight to that project (`1` = All projects = clear filter). Filterable pickers
 (blockers) take type-to-filter instead.
 
+## Ordering & reorder
+
+List views sort by date (earliest of `sched`/`due`), and `Array.sort` is stable,
+so within a date your file order is the order shown. `J`/`K` reorder by moving the
+selected item's subtree past its nearest sibling that is both visible in the
+current view *and* sorts to the same slot (same date) — so it nudges the list
+you're actually looking at, and no-ops across a date boundary. Reorder skips
+`computeStatus` and only repaints the list (`renderMain`), and a burst of moves
+collapses into one undo step (`mutate(fn, { coalesce, reorderOnly })`).
+
 ## Selection
 
 `mutate()` records the selected row's list index before the change; if that row

@@ -48,8 +48,8 @@ const ACTIONS = {
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
   editNote: { group: "Selected item", label: "edit note", sel: true, run: ({ sel }) => editNote(sel) },
   editLink: { group: "Selected item", label: "edit link", sel: true, run: ({ sel }) => editLink(sel) },
-  moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1)) },
-  moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1)) },
+  moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1), { coalesce: "reorder", reorderOnly: true }) },
+  moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1), { coalesce: "reorder", reorderOnly: true }) },
   del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
   undo: { group: "Selected item", label: "undo", run: () => undo() },
 
@@ -216,22 +216,34 @@ async function save() {
   }
 }
 
-function mutate(fn) {
-  state.undo.push(P.serialize(state.model));
-  if (state.undo.length > 50) state.undo.shift();
+const _coalesce = {};
+
+// opts.coalesce: a tag; consecutive mutations with the same tag within ~700ms
+//   share one undo step (so a burst of reorders undoes as a unit)
+// opts.reorderOnly: true when the model's order changed but nothing else —
+//   skips computeStatus and only re-renders the list, not the whole shell
+function mutate(fn, opts = {}) {
+  const now = Date.now();
+  const merge = opts.coalesce && now - (_coalesce[opts.coalesce] || 0) < 700;
+  _coalesce[opts.coalesce] = now;
+  if (!merge) {
+    state.undo.push(P.serialize(state.model));
+    if (state.undo.length > 50) state.undo.shift();
+  }
   const prevIdx = state._flat.indexOf(state.selectedId);
   fn();
-  recompute();
+  if (!opts.reorderOnly) recompute();
   scheduleSave();
-  render();
+  const paint = opts.reorderOnly ? renderMain : render;
+  paint();
   // if the change pushed the selected item out of view (bump, done, delete…),
   // move to the row that took its slot — the next one down — or, if it was the
   // last row, the new last row. Only clears when the list is now empty.
   if (prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
     state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] ?? null;
-    render();
-    document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+    paint();
   }
+  document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
 }
 
 function undo() {
@@ -436,7 +448,8 @@ function visibleRoots() {
     .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
     .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
     .filter((r) => editing(r) || !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
-    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || (b.bumps || 0) - (a.bumps || 0));
+    // by date, then your manual order (file order) within a date — Array.sort is stable
+    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 }
 
 function sortKey(it) {
@@ -1177,6 +1190,27 @@ function shortcutsEditorEl() {
 
 let RENDERING = false;
 
+function paintList(main) {
+  if (state.view === "shortcuts") main.append(shortcutsEditorEl());
+  else if (state.view === "projects") renderProjects(main);
+  else if (state.view === "done") renderDone(main);
+  else if (state.view === "blocked") renderBlocked(main);
+  else renderList(main);
+}
+
+// rebuild only the list, not the sidebar/header — for changes that don't move
+// items between views (reordering)
+function renderMain() {
+  const main = $(".main");
+  if (!main) return render();
+  RENDERING = true;
+  main.innerHTML = "";
+  state._focusEl = null;
+  paintList(main);
+  RENDERING = false;
+  if (state._focusEl) state._focusEl.focus();
+}
+
 function render() {
   const app = $("#app");
   RENDERING = true; // tearing down the DOM blurs the edit input — don't treat that as a commit
@@ -1254,11 +1288,7 @@ function render() {
 
   const main = document.createElement("div");
   main.className = "main";
-  if (state.view === "shortcuts") main.append(shortcutsEditorEl());
-  else if (state.view === "projects") renderProjects(main);
-  else if (state.view === "done") renderDone(main);
-  else if (state.view === "blocked") renderBlocked(main);
-  else renderList(main);
+  paintList(main);
   mainWrap.append(main);
   app.append(mainWrap);
 
@@ -1668,21 +1698,38 @@ function openSetProject(sel) {
   });
 }
 
+// Move `it`'s subtree past its nearest sibling that (a) is visible in the current
+// view and (b) sorts to the same slot — same depth, same sortKey (date). Since
+// list views sort by date and keep file order within a date, that's the only
+// reorder that's actually visible, so J/K nudges the list you're looking at.
 function reorder(it, dir) {
   const items = state.model.items;
+  const visible = new Set(state._flat);
+  const key = sortKey(it);
+  const sibling = (x) => x.depth === it.depth && visible.has(x.id) && sortKey(x) === key;
   const [i, e] = subtreeRange(it);
   if (dir < 0) {
     let p = i - 1;
-    while (p >= 0 && items[p].depth > it.depth) p--;
-    if (p < 0 || items[p].depth !== it.depth) return;
+    while (p >= 0) {
+      if (items[p].depth < it.depth) return; // out of the parent
+      if (sibling(items[p])) break;
+      p--;
+    }
+    if (p < 0) return;
     let ps = p;
-    while (ps > 0 && items[ps - 1].depth > it.depth) ps--;
+    while (ps > 0 && items[ps - 1].depth > it.depth) ps--; // start of that sibling's subtree
     const block = items.splice(i, e - i);
     items.splice(ps, 0, ...block);
   } else {
-    if (e >= items.length || items[e].depth !== it.depth) return;
-    let ne = e + 1;
-    while (ne < items.length && items[ne].depth > it.depth) ne++;
+    let n = e;
+    while (n < items.length) {
+      if (items[n].depth < it.depth) return;
+      if (sibling(items[n])) break;
+      n++;
+    }
+    if (n >= items.length) return;
+    let ne = n + 1;
+    while (ne < items.length && items[ne].depth > it.depth) ne++; // end of that sibling's subtree
     const block = items.splice(i, e - i);
     items.splice(i + (ne - e), 0, ...block);
   }
