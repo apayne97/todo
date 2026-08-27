@@ -42,7 +42,7 @@ const ACTIONS = {
   setSched: { group: "Selected item", label: "set scheduled date", sel: true, run: ({ sel }) => askSched(sel) },
   setDue: { group: "Selected item", label: "set due date", sel: true, run: ({ sel }) => askDue(sel) },
   setRepeat: { group: "Selected item", label: "set repeat", sel: true, run: ({ sel }) => askRepeat(sel) },
-  syncDates: { group: "Selected item", label: "give subtasks this item's dates", sel: true, run: ({ sel }) => syncSubtaskDates(sel) },
+  syncDates: { group: "Selected item", label: "copy dates to subtasks", sel: true, run: ({ sel }) => syncSubtaskDates(sel) },
   schedMinusDay: { group: "Nudge schedule", label: "−1 day", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "d") },
   schedPlusDay: { group: "Nudge schedule", label: "+1 day", sel: true, run: ({ sel }) => nudgeSched(sel, 1, "d") },
   schedMinusWeek: { group: "Nudge schedule", label: "−1 week", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "w") },
@@ -54,7 +54,7 @@ const ACTIONS = {
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
   editNote: { group: "Selected item", label: "edit note", sel: true, run: ({ sel }) => editNote(sel) },
   editLink: { group: "Selected item", label: "edit link", sel: true, run: ({ sel }) => editLink(sel) },
-  deps: { group: "Selected item", label: "dependency tree (waiting on / blocking)", sel: true, run: ({ sel }) => { state.deps = sel.id; state._depsTrail = []; render(); } },
+  deps: { group: "Selected item", label: "deps: waiting-on / blocking", sel: true, run: ({ sel }) => { state.deps = sel.id; state._depsTrail = []; render(); } },
   moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1), { coalesce: "reorder", reorderOnly: true }) },
   moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1), { coalesce: "reorder", reorderOnly: true }) },
   del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
@@ -64,7 +64,7 @@ const ACTIONS = {
   capture: { group: "Create", label: "quick capture", run: () => openCapture() },
   newBlocking: { group: "Create", label: "new task that blocks this", sel: true, run: ({ sel }) => createLinkedItem(sel, "blocking") },
   newDependent: { group: "Create", label: "new task that depends on this", sel: true, run: ({ sel }) => createLinkedItem(sel, "dependent") },
-  followUp: { group: "Create", label: '"follow up on …" task, blocked on this, due in 3d', sel: true, run: ({ sel }) => createFollowUp(sel) },
+  followUp: { group: "Create", label: "follow-up task (blocked on this, +3d)", sel: true, run: ({ sel }) => createFollowUp(sel) },
 };
 
 const DEFAULT_BINDINGS = {
@@ -1170,15 +1170,20 @@ function keymapEl() {
       wrap.append(r);
     }
   }
+  // Fixed keys sit in their own full-width band — several have long key text
+  // that reads badly squeezed into a narrow column.
+  const fixed = document.createElement("div");
+  fixed.className = "kfixed";
   const h = document.createElement("h3");
   h.textContent = "Fixed";
-  wrap.append(h);
+  fixed.append(h);
   for (const [keys, desc] of FIXED_KEYS) {
     const r = document.createElement("div");
     r.className = "krow";
     r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
-    wrap.append(r);
+    fixed.append(r);
   }
+  wrap.append(fixed);
   return wrap;
 }
 
@@ -1567,14 +1572,14 @@ function pickerEl() {
 
 function helpEl() {
   const wrap = document.createElement("div");
-  wrap.className = "ask";
+  wrap.className = "ask help";
   const box = document.createElement("div");
-  box.className = "askbox wide";
-  box.append(keymapEl());
+  box.className = "askbox wide help";
   const hint = document.createElement("p");
   hint.className = "hint";
   hint.textContent = "press ? or Esc to close";
   box.append(hint);
+  box.append(keymapEl());
   wrap.append(box);
   wrap.onclick = (e) => {
     if (e.target === wrap) {
@@ -1885,6 +1890,8 @@ function createLinkedItem(sel, direction) {
 const FOLLOWUP_RE = /^\s*follow[-\s]?up\s+(?:on|with|re|about)\s+/i;
 function createFollowUp(sel) {
   const base = (sel.title || "").replace(FOLLOWUP_RE, "").trim();
+  const origin = sel.id;
+  let newId;
   mutate(() => {
     const items = state.model.items;
     const it = P.parse("- [ ] new").items[0];
@@ -1897,9 +1904,19 @@ function createFollowUp(sel) {
     items.splice(end, 0, it);
     P.ensureIds(items);
     it.needs.push(sel.id);
+    newId = it.id;
     state.selectedId = it.id;
-    state.editing = { id: it.id, mode: "title" };
-  });
+  }, { keepSel: true });
+  toast(`follow-up queued — now check off "${(sel.title || "task").slice(0, 28)}"`);
+  // brief beat on the new task, then hand focus back to the original so the
+  // usual next move (mark the reach-out done with x) just works
+  setTimeout(() => {
+    if (state.selectedId === newId) {
+      state.selectedId = origin;
+      render();
+      document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+    }
+  }, 500);
 }
 
 // ---------- action helpers (called from ACTIONS) ----------

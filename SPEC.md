@@ -241,7 +241,9 @@ view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
 selected one · `D` new task that depends on it · `F` follow-up: a dependent
 "follow up on <title>" task (leading "follow up on/with" stripped so chains don't
 stack), same project, `sched` +3 days — blocked until you've done the original, so
-it surfaces only once you've actually reached out
+it surfaces only once you've actually reached out. `F` doesn't open it for
+editing; after a brief beat the selection snaps back to the original task so you
+can `x` it right away.
 
 **Not rebindable:** `1`–`9` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
 `Esc` (graduated back-out: clear filters → deselect → close) · Projects view

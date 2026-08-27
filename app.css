@@ -545,6 +545,63 @@ button.kbd:hover {
   width: 720px;
 }
 
+/* keyboard help (?) — near the top so a long list isn't clipped, and scrolls
+   inside itself if it's still taller than the window */
+.ask.help {
+  padding-top: 48px;
+}
+
+.askbox.wide.help {
+  width: 960px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 72px);
+  padding-top: 12px;
+}
+
+.askbox.help .hint {
+  flex: none;
+  margin: 0 0 2px;
+  padding: 0 20px;
+}
+
+.askbox.help .keymap {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  columns: 3;
+}
+
+.askbox.help kbd {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+}
+
+/* "Fixed" band spans the full width under the columns — its key text is long */
+.askbox.help .kfixed {
+  column-span: all;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.askbox.help .kfixed .krow {
+  break-inside: avoid;
+}
+
+@media (max-width: 980px) {
+  .askbox.help .keymap {
+    columns: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .askbox.help .keymap {
+    columns: 1;
+  }
+}
+
 /* dependency overlay */
 .depshead {
   display: flex;
