@@ -118,8 +118,9 @@ always show in **Review**.
 | 4 | Inbox      | no `sched`, no `due`                                                  |
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
 | 6 | Blocked    | items waiting on a dependency, plus a "ready" and a "problems" section |
-| 7 | Projects   | one card per project: description, info, live task counts             |
-| 8 | Shortcuts  | full keyboard reference                                               |
+| 7 | Recurring  | every not-done item with a `repeat:` token, whatever its date          |
+| 8 | Projects   | one card per project: description, info, live task counts             |
+| 9 | Shortcuts  | full keyboard reference                                               |
 
 Project filter (`p`) and text search (`/`) layer on top of any view.
 Dates render relative: "Mon", "in 3d", "2d overdue" (red).
@@ -238,6 +239,16 @@ Notion "2026 To-Do List" fields map to tokens:
 | Priority          | `pri:`                      |
 | Blocked by        | `needs:`                    |
 | Do This Week / Today | computed from `sched`    |
+
+## Demo mode
+
+`?demo` (or `#demo`) loads `tutorial.md` instead of `todos.md`, read-only —
+`scheduleSave` and `pollDisk` no-op, a "DEMO · changes aren't saved" chip shows in
+the header, and the Shortcuts view links into it. `tutorial.md` is a self-guided
+example file: each task's title explains the feature it demonstrates (overdue
+section, bump-chip colours, both recurrence kinds, subtask progress, a blocking
+chain, a "ready" item, a broken ref, a cycle, notes, links) and the Done section
+is dated across recent days to populate the graph.
 
 ## Out of scope (v1)
 

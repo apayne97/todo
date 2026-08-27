@@ -282,6 +282,14 @@ header h1 {
   border-color: var(--accent);
 }
 
+.chip.demo {
+  cursor: pointer;
+  color: var(--bg);
+  background: var(--warn);
+  border: 0;
+  font-weight: 600;
+}
+
 .chip.age {
   color: var(--dim);
 }
@@ -484,6 +492,18 @@ button.kbd:hover {
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.demolink {
+  display: block;
+  margin: 14px 0 0;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.demolink:hover {
+  text-decoration: underline;
 }
 
 .pnum {

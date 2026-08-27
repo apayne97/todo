@@ -90,8 +90,15 @@ Press `?` in the app for the full list. Highlights: `j`/`k` move, `x` done,
 by project (numbered — `p` then a digit), `\` clear filters, `a` add,
 `c` quick-capture, `u` undo.
 
-Most keys are **rebindable** on the Shortcuts view (`8`) — click a key to remove
+Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
 it, `＋` to add one, "Reset all to defaults". Saved per-browser.
+
+## Demo
+
+Open `http://localhost:4444/?demo` for a read-only sandbox loaded from
+[tutorial.md](tutorial.md) — a self-guided example where each task title explains
+a feature. Changes stay in memory; reload to reset. There's a link to it on the
+Shortcuts view.
 
 ## Tests
 

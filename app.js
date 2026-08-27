@@ -9,6 +9,7 @@ const VIEWS = [
   ["inbox", "Inbox"],
   ["done", "Done"],
   ["blocked", "Blocked"],
+  ["recurring", "Recurring"],
   ["projects", "Projects"],
   ["shortcuts", "Shortcuts"],
 ];
@@ -71,7 +72,7 @@ const DEFAULT_BINDINGS = {
 
 // not rebindable — shown for reference on the Shortcuts page
 const FIXED_KEYS = [
-  ["1–8", "switch view"],
+  ["1–9", "switch view"],
   ["g g", "jump to top"],
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
   ["Esc", "clear filters, then deselect, then close"],
@@ -155,7 +156,18 @@ const keyLabel = (k) => KEY_LABELS[k] || k;
 
 // ---------- data ----------
 
+// ?demo (or #demo) loads tutorial.md read-only — a sandbox with every feature on display
+const DEMO = /(\bdemo\b)/.test(location.search) || location.hash === "#demo";
+
 async function load() {
+  if (DEMO) {
+    state.demo = true;
+    const text = await (await fetch("./tutorial.md")).text();
+    state.model = P.parse(text);
+    recompute();
+    render();
+    return;
+  }
   const r = await fetch(API);
   const { text, etag } = await r.json();
   state.model = P.parse(text);
@@ -170,6 +182,7 @@ function recompute() {
 
 let saveTimer = null;
 function scheduleSave() {
+  if (state.demo) return; // sandbox — changes live only in memory
   state.dirty = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(save, 350);
@@ -231,7 +244,7 @@ function undo() {
 }
 
 async function pollDisk() {
-  if (state.dirty || state.editing || state.ask) return;
+  if (state.demo || state.dirty || state.editing || state.ask) return;
   try {
     const r = await fetch(API);
     const { text, etag } = await r.json();
@@ -404,6 +417,7 @@ function viewMatch(it, view, t, we) {
     // "ready" items that aren't already surfaced in Today/This Week
     return isReady(it) && !((s && s <= we) || (d && d <= we));
   }
+  if (view === "recurring") return !!it.repeat;
   return false;
 }
 
@@ -1140,6 +1154,14 @@ function shortcutsEditorEl() {
     render();
   };
   wrap.append(reset);
+
+  if (!state.demo) {
+    const demo = document.createElement("a");
+    demo.className = "demolink";
+    demo.href = "?demo";
+    demo.textContent = "Open the demo — a sandbox with every feature on display →";
+    wrap.append(demo);
+  }
   return wrap;
 }
 
@@ -1213,6 +1235,13 @@ function render() {
     head.append(s);
   }
   if (state.dirty) head.append(chip("saving…", "saving"));
+  if (state.demo) {
+    const d = chip("DEMO · changes aren't saved · exit ✕", "demo");
+    d.onclick = () => {
+      location.href = location.pathname;
+    };
+    head.append(d);
+  }
   mainWrap.append(head);
 
   const main = document.createElement("div");
@@ -1685,7 +1714,7 @@ document.addEventListener("keydown", (e) => {
     const act = state.capturingKey;
     state.capturingKey = null;
     if (k === "Escape") return render();
-    if (/^[1-8]$/.test(k) || k === "g" || k === "Tab" || k === " ") {
+    if (/^[1-9]$/.test(k) || k === "g" || k === "Tab" || k === " ") {
       toast(`${keyLabel(k)} is reserved`);
       return render();
     }
@@ -1751,7 +1780,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // view switching (not rebindable)
-  if (/^[1-8]$/.test(k) && Number(k) <= VIEWS.length) {
+  if (/^[1-9]$/.test(k) && Number(k) <= VIEWS.length) {
     state.view = VIEWS[Number(k) - 1][0];
     state.selectedId = null;
     return render();
