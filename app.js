@@ -452,14 +452,18 @@ function isReady(it) {
 }
 
 function isOverdue(it) {
-  return !it.done && ((it.sched && it.sched < todayISO()) || (it.due && it.due < todayISO()));
+  const s = it._effSched ?? it.sched;
+  const d = it._effDue ?? it.due;
+  return !it.done && ((s && s < todayISO()) || (d && d < todayISO()));
 }
 
 function viewMatch(it, view, t, we) {
   if (view === "done") return it.done;
   if (it.done) return false;
-  const s = it.sched;
-  const d = it.due;
+  // effective dates (see computeStatus): a subtask inherits its parent's start,
+  // so it isn't pulled into Today/This Week ahead of the task it belongs to
+  const s = it._effSched ?? it.sched;
+  const d = it._effDue ?? it.due;
   if (view === "today") return !it.isBlocked && ((s && s <= t) || (d && d <= t));
   if (view === "week") return !it.isBlocked && ((s && s <= we) || (d && d <= we));
   if (view === "upcoming") return (s && s > we) || (!s && d && d > we);

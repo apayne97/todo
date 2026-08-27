@@ -134,8 +134,15 @@ dependent task straight into title-edit without opening the overlay.
 | 8 | Projects   | one card per project: description, info, live task counts             |
 | 9 | Shortcuts  | full keyboard reference                                               |
 
-Project filter (`p`) and text search (`/`) layer on top of any view.
+Project filter (`P`) and text search (`/`) layer on top of any view.
 Dates render relative: "Mon", "in 3d", "2d overdue" (red).
+
+**Effective dates.** Views filter on an item's *effective* `sched`/`due`, which
+for a subtask is floored by its parent's — a checklist item can't be actioned
+before the task it's part of. So a subtask dated today under a parent scheduled
+for next week stays in Upcoming with its parent, not scattered into Today. The
+row still shows its own tokens; only the raw token is preserved on save
+(`computeStatus` sets `_effSched` / `_effDue`).
 
 **Today** puts overdue items (`sched` or `due` in the past) in an "overdue"
 section above the rest, so a slipping backlog is visible without a separate view.

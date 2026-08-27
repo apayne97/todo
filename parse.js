@@ -392,6 +392,18 @@ export function computeStatus(model, todayISO) {
   for (const it of items) if (it.id) dfs(it.id);
 
   for (const it of items) it.isBlocked = it._blockedBy.length > 0 || it._cycle === true;
+
+  // Effective dates: a subtask is part of its parent task, so it can't come due
+  // before the parent is scheduled to start. Views filter on these, not the raw
+  // token, so a checklist under a task scheduled for next week doesn't scatter
+  // its items into Today. The row still displays its own tokens.
+  const later = (a, b) => (a && b ? (a > b ? a : b) : a || b || null);
+  const propagate = (it, pSched, pDue) => {
+    it._effSched = later(it.sched, pSched);
+    it._effDue = later(it.due, pDue);
+    for (const c of it.children) propagate(c, it._effSched, it._effDue);
+  };
+  for (const r of buildTrees(items)) propagate(r, null, null);
 }
 
 // ---------- mutations ----------

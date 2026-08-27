@@ -81,6 +81,30 @@ test("needs: makes an item blocked until its blocker is done", () => {
   assert.equal(model.items.find((i) => i.id === "d2").isBlocked, false);
 });
 
+test("a subtask's effective date is floored by its parent's schedule", () => {
+  const model = P.parse(
+    [
+      "# Todos",
+      "",
+      "- [ ] check finances sched:2026-09-05 id:p1",
+      "  - [ ] schwab sched:2026-08-27 id:c1",
+      "  - [ ] amex id:c2",
+      "- [ ] loose end sched:2026-08-27 id:x1",
+      "",
+      "## Done",
+      "",
+    ].join("\n")
+  );
+  P.computeStatus(model, "2026-08-27");
+  const c1 = model.items.find((i) => i.id === "c1");
+  const c2 = model.items.find((i) => i.id === "c2");
+  const x1 = model.items.find((i) => i.id === "x1");
+  assert.equal(c1._effSched, "2026-09-05", "child's earlier date is pulled up to the parent's");
+  assert.equal(c2._effSched, "2026-09-05", "dateless child inherits the parent's");
+  assert.equal(c1.sched, "2026-08-27", "the raw token is untouched");
+  assert.equal(x1._effSched, "2026-08-27", "a non-subtask keeps its own date");
+});
+
 test("round-trips a Projects section", () => {
   const src = [
     "# Todos",
