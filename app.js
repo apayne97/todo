@@ -484,8 +484,10 @@ function viewMatch(it, view, t, we) {
   if (view === "inbox") return !s && !d && !it.isBlocked;
   if (view === "blocked") {
     if (it.isBlocked || it._dangling.length > 0) return true;
-    // "ready" items that aren't already surfaced in Today/This Week
-    return isReady(it) && !((s && s <= we) || (d && d <= we));
+    // "ready" = a just-unblocked item. Only surface undated ones here; a dated
+    // one already shows in Today / This Week / Upcoming, so listing it again
+    // would just be a duplicate.
+    return isReady(it) && !s && !d;
   }
   if (view === "recurring") return !!it.repeat;
   return false;

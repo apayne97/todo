@@ -150,8 +150,9 @@ The schedule chip is hidden on rows dated *exactly* today (it'd be on every row)
 but kept when overdue, so "3d over" still shows how far a task has slipped.
 
 **Blocked** groups not-done items into:
-- **ready — blockers cleared** — a `needs:` list that's now fully satisfied, and
-  not already showing in Today/This Week. "This was gated, now do it."
+- **ready — blockers cleared** — a `needs:` list that's now fully satisfied *and
+  has no `sched`/`due`*. "This was gated, now give it a date." A dated one is
+  skipped here because Today / This Week / Upcoming already carry it.
 - **blocked** — an unfinished `needs:` task in the way. Shown with 🔒 and the
   blocker's title.
 - **problems** — `needs:` points at a task that no longer exists, or a dependency
