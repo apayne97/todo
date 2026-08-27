@@ -60,12 +60,12 @@ const ACTIONS = {
 };
 
 const DEFAULT_BINDINGS = {
-  down: ["j", "ArrowDown"], up: ["k", "ArrowUp"], bottom: ["G"],
-  search: ["/"], filterProject: ["p"], clearFilters: ["\\"], help: ["?"],
+  down: ["k", "ArrowDown"], up: ["j", "ArrowUp"], bottom: ["G"],
+  search: ["/"], filterProject: ["P"], clearFilters: ["\\"], help: ["?"],
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
-  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["P"],
+  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
-  moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
+  moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
 };
@@ -109,11 +109,10 @@ const $ = (sel, el = document) => el.querySelector(sel);
 
 // ---------- key bindings ----------
 
-function loadBindings() {
-  let stored = {};
-  try {
-    stored = JSON.parse(localStorage.getItem("todo.keys") || "{}");
-  } catch {}
+// Overrides are stored server-side (todo.config.json, via /config) so a rebind
+// follows you to every browser — regular Chrome, the installed app, the phone.
+// localStorage is a same-session cache so startup doesn't flash the defaults.
+function bindingsFrom(stored) {
   const b = {};
   for (const act of Object.keys(ACTIONS)) {
     b[act] = Array.isArray(stored[act]) ? stored[act] : DEFAULT_BINDINGS[act] || [];
@@ -121,19 +120,58 @@ function loadBindings() {
   return b;
 }
 
-let BINDINGS = loadBindings();
-
-function saveBindings() {
+function localKeyCache() {
   try {
-    localStorage.setItem("todo.keys", JSON.stringify(BINDINGS));
+    return JSON.parse(localStorage.getItem("todo.keys") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+let BINDINGS = bindingsFrom(localKeyCache());
+
+// only the entries that differ from the defaults get persisted
+function bindingOverrides() {
+  const diff = {};
+  for (const act of Object.keys(BINDINGS)) {
+    if (JSON.stringify(BINDINGS[act]) !== JSON.stringify(DEFAULT_BINDINGS[act] || [])) {
+      diff[act] = BINDINGS[act];
+    }
+  }
+  return diff;
+}
+
+async function loadBindings() {
+  if (DEMO) return;
+  try {
+    const r = await fetch("/config");
+    if (!r.ok) return;
+    const cfg = await r.json();
+    const keys = cfg.keys || {};
+    BINDINGS = bindingsFrom(keys);
+    try {
+      localStorage.setItem("todo.keys", JSON.stringify(keys));
+    } catch {}
+    if ($("#app")?.childElementCount) render();
   } catch {}
 }
 
-function resetBindings() {
+function saveBindings() {
+  const diff = bindingOverrides();
   try {
-    localStorage.removeItem("todo.keys");
+    localStorage.setItem("todo.keys", JSON.stringify(diff));
   } catch {}
-  BINDINGS = loadBindings();
+  if (DEMO) return;
+  fetch("/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys: diff }),
+  }).catch(() => {});
+}
+
+function resetBindings() {
+  BINDINGS = bindingsFrom({});
+  saveBindings();
 }
 
 function actionForKey(k) {
@@ -1131,7 +1169,7 @@ function shortcutsEditorEl() {
   bar.className = "dayhead";
   bar.textContent = state.capturingKey
     ? `press a key for "${ACTIONS[state.capturingKey].label}"  ·  Esc to cancel`
-    : "click a key to remove it · + to add · bindings are saved in this browser";
+    : "click a key to remove it · + to add · saved on the server — they follow you to every browser and your phone";
   wrap.append(bar);
 
   for (const [group, entries] of Object.entries(actionGroups())) {
@@ -1493,7 +1531,7 @@ function pickerEl() {
   hint.className = "hint";
   hint.textContent = p.filterable
     ? "type to filter · ↑↓ move · Enter choose · Esc close"
-    : "↑↓ or j/k · Enter choose · Esc close";
+    : (p.numbered ? "number picks · " : "") + "↑↓ or nav keys move · Enter choose · Esc close";
   box.append(hint);
   wrap.append(box);
   wrap.onclick = (e) => {
@@ -1892,7 +1930,7 @@ function openSetProject(sel) {
   openPicker("Set project", opts, cur < 0 ? 0 : cur, (v) => {
     if (v === "__new__") return newProjectName((name) => mutate(() => (sel.projects = [name])));
     mutate(() => (sel.projects = v ? [v] : []));
-  });
+  }, { numbered: true });
 }
 
 // Move `it`'s subtree past its nearest sibling that (a) is visible in the current
@@ -1983,11 +2021,11 @@ document.addEventListener("keydown", (e) => {
       return render();
     }
     if (k === "Enter") return choosePicker(vis[p.hi]);
-    if (k === "ArrowDown" || (!p.filterable && k === "j")) {
+    if (k === "ArrowDown" || (!p.filterable && actionForKey(k) === "down")) {
       p.hi = (p.hi + 1) % n;
       return render();
     }
-    if (k === "ArrowUp" || (!p.filterable && k === "k")) {
+    if (k === "ArrowUp" || (!p.filterable && actionForKey(k) === "up")) {
       p.hi = (p.hi - 1 + n) % n;
       return render();
     }
@@ -2107,4 +2145,5 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+loadBindings();
 load();

@@ -32,6 +32,8 @@ const argVal = (flag) => {
 
 const PORT = Number(argVal("--port") || process.env.TODO_PORT || 4444);
 const FILE = resolve(HERE, argVal("--file") || process.env.TODO_FILE || "todos.md");
+// UI prefs (currently just key bindings). Local to this machine, not committed.
+const CONFIG = resolve(HERE, "todo.config.json");
 const AUTOPUSH = process.env.TODO_AUTOPUSH === "1";
 const AUTOCOMMIT = AUTOPUSH || process.env.TODO_AUTOCOMMIT === "1";
 
@@ -145,6 +147,29 @@ const server = createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ ok: true, etag: await etagOf(FILE) }), {
         "Content-Type": MIME[".json"],
       });
+    }
+    return send(res, 405, "method not allowed");
+  }
+
+  if (url.pathname === "/config") {
+    if (req.method === "GET") {
+      let cfg = "{}";
+      try {
+        cfg = await readFile(CONFIG, "utf8");
+      } catch {}
+      return send(res, 200, cfg, { "Content-Type": MIME[".json"] });
+    }
+    if (req.method === "PUT") {
+      let payload;
+      try {
+        payload = JSON.parse(await readBody(req));
+      } catch {
+        return send(res, 400, JSON.stringify({ error: "bad json" }), { "Content-Type": MIME[".json"] });
+      }
+      const tmp = CONFIG + ".tmp-" + process.pid;
+      await writeFile(tmp, JSON.stringify(payload, null, 2) + "\n", "utf8");
+      await rename(tmp, CONFIG);
+      return send(res, 200, JSON.stringify({ ok: true }), { "Content-Type": MIME[".json"] });
     }
     return send(res, 405, "method not allowed");
   }

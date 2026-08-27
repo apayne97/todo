@@ -21,6 +21,7 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 - **Server:** ~30-line Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag
+  - `GET`/`PUT /config` → `todo.config.json` (UI prefs — key bindings; gitignored)
   - auto `git commit` after each successful write (clean history; Claude always
     sees current state)
 - **Run:** `npm start`, or a `.claude/launch.json` entry so it's one command.
@@ -197,41 +198,47 @@ option).
 
 ## Keyboard map
 
-Most keys are **rebindable** — the Shortcuts view (`8`) has an inline editor
+Most keys are **rebindable** — the Shortcuts view (`9`) has an inline editor
 (click a key to drop it, `＋` to add one, "Reset all to defaults"). Overrides are
-stored per-browser in `localStorage`. `ACTIONS` is the registry (name → label +
-`run`); `DEFAULT_BINDINGS` is action → keys. The keydown handler dispatches via a
-key→action lookup. The `?` overlay and Shortcuts view both render from the live
-bindings.
+stored **server-side** in `todo.config.json` (`GET`/`PUT /config`), so a rebind
+follows you to every browser — regular Chrome, the installed app, the phone.
+`localStorage` is only a same-session cache so startup doesn't flash the defaults;
+only entries that differ from the defaults are persisted. `ACTIONS` is the
+registry (name → label + `run`); `DEFAULT_BINDINGS` is action → keys. The keydown
+handler dispatches via a key→action lookup, so the same override reaches the list,
+the project pickers and the overlays. The `?` overlay and Shortcuts view render
+from the live bindings.
 
 Defaults:
 
-**Navigate:** `j`/`k` move · `G` bottom · `/` search · `p` project filter ·
+**Navigate:** `j` up · `k` down · `G` bottom · `/` search · `P` project filter ·
 `\` clear filters · `?` help overlay
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
 `w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat ·
-`.` or `b` dependency overlay · `P` set project · `e`/`Enter` edit title ·
-`E` edit whole line · `n` note · `l` link · `J`/`K` reorder · `#` delete · `u` undo
+`.` or `b` dependency overlay · `p` set project · `e`/`Enter` edit title ·
+`E` edit whole line · `n` note · `l` link · `J` reorder up · `K` reorder down ·
+`#` delete · `u` undo
 
 **Create:** `a` add here — inline, after the selection, prefills `sched:today` in
 Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any
 view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
 selected one · `D` new task that depends on it
 
-**Not rebindable:** `1`–`8` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
+**Not rebindable:** `1`–`9` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
 `Esc` (graduated back-out: clear filters → deselect → close) · Projects view
-`e`/`n`/`l`/`C`/`a`
+`e`/`n`/`l`/`C`/`r`/`a`
 
-**Pickers:** the project-filter picker is numbered — `p` then a digit jumps
-straight to that project (`1` = All projects = clear filter). Filterable pickers
-(blockers) take type-to-filter instead.
+**Pickers:** the project-filter (`P`) and set-project (`p`) pickers are numbered —
+the letter then a digit jumps straight to that entry (`1` in the filter = All
+projects = clear filter; `1` in set-project = no project). The nav keys move the
+highlight. Filterable pickers (blockers) take type-to-filter instead.
 
 ## Ordering & reorder
 
 List views sort by date (earliest of `sched`/`due`), and `Array.sort` is stable,
-so within a date your file order is the order shown. `J`/`K` reorder by moving the
-selected item's subtree past its nearest sibling that is both visible in the
+so within a date your file order is the order shown. `J`/`K` (reorder up/down)
+move the selected item's subtree past its nearest sibling that is both visible in the
 current view *and* sorts to the same slot (same date) — so it nudges the list
 you're actually looking at, and no-ops across a date boundary. Reorder skips
 `computeStatus` and only repaints the list (`renderMain`), and a burst of moves

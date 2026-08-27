@@ -102,14 +102,16 @@ Edit them on the Projects view (`7`).
 
 ## Keys
 
-Press `?` in the app for the full list. Highlights: `j`/`k` move, `x` done,
+Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `e` edit title,
-`E` whole line, `n` note, `l` link, `.`/`b` dependency overlay, `P` set project, `p` filter
-by project (numbered — `p` then a digit), `\` clear filters, `a` add,
-`c` quick-capture, `u` undo.
+`E` whole line, `n` note, `l` link, `.`/`b` dependency overlay, `p` set project,
+`P` filter by project, `\` clear filters, `a` add, `c` quick-capture, `u` undo.
+Both project pickers are numbered — the letter then a digit jumps straight there.
 
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
-it, `＋` to add one, "Reset all to defaults". Saved per-browser.
+it, `＋` to add one, "Reset all to defaults". Overrides are saved on the server
+(`todo.config.json`), so they follow you to the installed app and your phone —
+not just the browser you set them in.
 
 ## Demo
 

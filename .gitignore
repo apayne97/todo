@@ -1,5 +1,7 @@
 node_modules/
 package-lock.json
 todos.md.tmp-*
+todo.config.json
+todo.config.json.tmp-*
 
 server.log
