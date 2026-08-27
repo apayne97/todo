@@ -212,10 +212,10 @@ function mutate(fn) {
   scheduleSave();
   render();
   // if the change pushed the selected item out of view (bump, done, delete…),
-  // move to the item that took its slot — i.e. the next one down — or nothing if
-  // it was at the end of the list
+  // move to the row that took its slot — the next one down — or, if it was the
+  // last row, the new last row. Only clears when the list is now empty.
   if (prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
-    state.selectedId = state._flat[prevIdx] ?? null;
+    state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] ?? null;
     render();
     document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
   }

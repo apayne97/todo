@@ -205,9 +205,9 @@ straight to that project (`1` = All projects = clear filter). Filterable pickers
 
 `mutate()` records the selected row's list index before the change; if that row
 leaves the view afterwards (bump, done, delete, reschedule, project change…) the
-selection moves to the row that took its slot — the next one down — or clears if
-it was at the end of the list. Keeps you working straight down without scrolling
-back.
+selection moves to the row that took its slot — the next one down — falling back
+to the new last row if it was the last, and clearing only when the list is now
+empty. Keeps you working straight down without scrolling back.
 
 ## Undo
 
