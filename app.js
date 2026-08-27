@@ -75,7 +75,7 @@ const FIXED_KEYS = [
   ["g g", "jump to top"],
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
   ["Esc", "clear filters, then deselect, then close"],
-  ["Projects view: e n l C a", "description · info · link · color · new project"],
+  ["Projects view: e n l C r a", "description · info · link · color · rename · new project"],
 ];
 
 const state = {
@@ -890,7 +890,7 @@ function renderProjects(main) {
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
-  hint.textContent = "e description · n info · l link · C color · a new project · click name to filter";
+  hint.textContent = "e description · r rename · n info · l link · C color · a new project · click name to filter";
   main.append(hint);
 
   if (!rows.length) {
@@ -1001,10 +1001,37 @@ function editProjectMeta(name) {
   );
 }
 
+function slugifyProject(v) {
+  return v
+    .trim()
+    .replace(/^\+/, "")
+    .replace(/[^\w-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function newProjectName(onName) {
   ask('new project name (spaces become "-")', "", (v) => {
-    const name = v.trim().replace(/^\+/, "").replace(/\s+/g, "-");
+    const name = slugifyProject(v);
     if (name) onName(name);
+  });
+}
+
+// Rename a project everywhere: its `## Projects` entry, every `+tag`, the filter
+// and the current selection.
+function renameProject(oldName) {
+  ask(`rename "${oldName}" to`, oldName, (v) => {
+    const name = slugifyProject(v);
+    if (!name || name === oldName) return;
+    if (allProjects().includes(name)) return toast(`"${name}" already exists`);
+    mutate(() => {
+      const e = projectEntry(oldName);
+      if (e) e.name = name;
+      for (const it of state.model.items) {
+        it.projects = it.projects.map((p) => (p === oldName ? name : p));
+      }
+      if (state.projectFilter === oldName) state.projectFilter = name;
+      if (state.selectedId === oldName) state.selectedId = name;
+    });
   });
 }
 
@@ -1751,7 +1778,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // Projects view: contextual keys (not rebindable)
-  if (state.view === "projects" && ["e", "Enter", "n", "l", "C", "a"].includes(k)) {
+  if (state.view === "projects" && ["e", "Enter", "n", "l", "C", "r", "a"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -1763,6 +1790,7 @@ document.addEventListener("keydown", (e) => {
     if (k === "n") return editProjectMeta(state.selectedId);
     if (k === "l") return editProjectLink(state.selectedId);
     if (k === "C") return editProjectColor(state.selectedId);
+    if (k === "r") return renameProject(state.selectedId);
     return editProjectDesc(state.selectedId);
   }
 

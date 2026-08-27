@@ -163,9 +163,11 @@ on save. `color:` overrides the name-hashed default and applies everywhere the
 project's dot or chip shows; it accepts any CSS color (`#4da6e5`, `rebeccapurple`,
 `hsl(...)`).
 
-On the Projects view: `e` description (multi-line), `n` info lines, `l` link,
-`C` color (swatch picker + native color input), `a` new project, click the name
-to filter the list by it. Creating a new item while a project filter is active
+On the Projects view: `e` description (multi-line), `r` rename, `n` info lines,
+`l` link, `C` color (swatch picker + native color input), `a` new project, click
+the name to filter the list by it. **Rename** rewrites the `### heading`, every
+`+tag` on tasks, the active filter and the selection in one step; it refuses a
+name that already exists. Creating a new item while a project filter is active
 tags it with that project; `P` on any item sets its project (with a "new project"
 option).
 
