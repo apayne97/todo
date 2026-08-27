@@ -146,6 +146,8 @@ row still shows its own tokens; only the raw token is preserved on save
 
 **Today** puts overdue items (`sched` or `due` in the past) in an "overdue"
 section above the rest, so a slipping backlog is visible without a separate view.
+The schedule chip is hidden on rows dated *exactly* today (it'd be on every row)
+but kept when overdue, so "3d over" still shows how far a task has slipped.
 
 **Blocked** groups not-done items into:
 - **ready — blockers cleared** — a `needs:` list that's now fully satisfied, and
@@ -223,9 +225,9 @@ Defaults:
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
 `w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat ·
-`.` or `b` dependency overlay · `p` set project · `e`/`Enter` edit title ·
-`E` edit whole line · `n` note · `l` link · `J` reorder up · `K` reorder down ·
-`#` delete · `u` undo
+`S` copy this item's dates onto all its subtasks · `.` or `b` dependency overlay ·
+`p` set project · `e`/`Enter` edit title · `E` edit whole line · `n` note ·
+`l` link · `J` reorder up · `K` reorder down · `#` delete · `u` undo
 
 **Create:** `a` add here — inline, after the selection, prefills `sched:today` in
 Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any

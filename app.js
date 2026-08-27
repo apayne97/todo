@@ -42,6 +42,7 @@ const ACTIONS = {
   setSched: { group: "Selected item", label: "set scheduled date", sel: true, run: ({ sel }) => askSched(sel) },
   setDue: { group: "Selected item", label: "set due date", sel: true, run: ({ sel }) => askDue(sel) },
   setRepeat: { group: "Selected item", label: "set repeat", sel: true, run: ({ sel }) => askRepeat(sel) },
+  syncDates: { group: "Selected item", label: "give subtasks this item's dates", sel: true, run: ({ sel }) => syncSubtaskDates(sel) },
   setProject: { group: "Selected item", label: "set project", sel: true, run: ({ sel }) => openSetProject(sel) },
   editTitle: { group: "Selected item", label: "edit title", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "title" }; render(); } },
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
@@ -65,6 +66,7 @@ const DEFAULT_BINDINGS = {
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
   setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
+  syncDates: ["S"],
   moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
@@ -581,7 +583,9 @@ function rowEl(it) {
   }
   if (it.pri) row.append(chip(it.pri, "pri pri-" + it.pri));
   if (it.due) row.append(chip("due " + relDay(it.due), "due" + (P.daysBetween(it.due, todayISO()) <= 1 ? " hot" : "")));
-  if (it.sched && !(state.view === "today" && it.sched <= todayISO()))
+  // In Today, an exact-today schedule is redundant; an overdue one still shows
+  // ("3d over") so you can see how far a task has slipped.
+  if (it.sched && !(state.view === "today" && it.sched === todayISO()))
     row.append(chip(relDay(it.sched), "sched"));
   if (it.repeat) row.append(chip("↻ " + it.repeat.kind + it.repeat.n + it.repeat.u, "rep"));
   if ((it.bumps || 0) > 0) {
@@ -1922,6 +1926,22 @@ function askRepeat(sel) {
       if (rep !== undefined) mutate(() => (sel.repeat = rep));
     }
   );
+}
+
+// Copy this item's sched/due onto every task nested under it. Handy after
+// splitting a task into a checklist: view filtering already floors a subtask's
+// effective date to its parent's, and this makes the raw tokens match too.
+function syncSubtaskDates(sel) {
+  const [i, e] = subtreeRange(sel);
+  const n = e - i - 1;
+  if (n < 1) return toast("no subtasks to sync");
+  mutate(() => {
+    for (let j = i + 1; j < e; j++) {
+      state.model.items[j].sched = sel.sched;
+      state.model.items[j].due = sel.due;
+    }
+  });
+  toast(`${n} subtask${n > 1 ? "s" : ""} → ${sel.sched ? relDay(sel.sched) : "no date"}`);
 }
 
 function openSetProject(sel) {
