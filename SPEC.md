@@ -88,24 +88,26 @@ Two mechanisms, matched to the two shapes dependencies take:
 2. **`needs:`** — cross-cutting links between non-nested items. App resolves ids
    to titles for display and warns on dangling refs and cycles.
 
-**Managing blockers** — press `b` on an item to open a picker: type to filter the
-list of open tasks, Enter/click toggles one on or off as a blocker (✓), no ids to
-remember. Two entries at the top spin up a *new* task and wire the link — same as
-the standalone `B` / `D` keys: **blocks this** (`B`, inserted before, this item
-`needs:` it) and **depends on this** (`D`, inserted after, it `needs:` this item)
-— both drop straight into title-edit, inheriting project and the current view's date.
-
 Blocked items render dimmed with 🔒, are hidden from Today / This Week / Inbox, and
 always show in **Blocked**.
 
-**Seeing the dependency graph.** `computeStatus` records both directions —
+**The dependency overlay.** `computeStatus` records both directions —
 `it._blockedBy` (what it waits on) and `it._blocking` (what waits on it). A row
 with N not-done dependents shows a green **`⛓ N`** chip — the counterpart to 🔒,
-i.e. "N tasks are waiting on me." Press **`.`** (or click the chip) for a
-two-column overlay centred on the selected item: **waiting on** (its `needs:`, ✓
-done / 🔒 itself blocked / ○ ready) and **blocking** (dependents, ▸ = would be
-ready if this were done). Number keys walk into an entry, Backspace walks back,
-the title selects that task in the list, Esc closes.
+i.e. "N tasks are waiting on me." Press **`.`** or **`b`** (or click the chip) for
+a two-column overlay centred on the selected task — it's both the viewer and the
+editor for dependencies:
+
+- **waiting on** — its `needs:` (✓ done / 🔒 itself blocked / ○ ready), with a
+  search field to link an existing task as a blocker and a "＋ new task that
+  blocks this" button
+- **blocking** — its dependents (▸ = would be ready if this were done), with a
+  search field to link an existing task and a "＋ new task that depends on this"
+
+`✕` on any row unlinks it. Number keys walk into an entry (follow the chain),
+Backspace walks back, the title selects that task in the list, Esc closes. The
+`B` / `D` keys are the shortcut for the two "＋ new" buttons — spawn a blocking /
+dependent task straight into title-edit without opening the overlay.
 
 ### Recurring — behavior on check-off
 
@@ -208,9 +210,9 @@ Defaults:
 `\` clear filters · `?` help overlay
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
-`w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat · `b` blockers ·
-`P` set project · `e`/`Enter` edit title · `E` edit whole line · `n` note ·
-`l` link · `J`/`K` reorder · `#` delete · `u` undo
+`w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat ·
+`.` or `b` dependency overlay · `P` set project · `e`/`Enter` edit title ·
+`E` edit whole line · `n` note · `l` link · `J`/`K` reorder · `#` delete · `u` undo
 
 **Create:** `a` add here — inline, after the selection, prefills `sched:today` in
 Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any

@@ -585,20 +585,100 @@ button.kbd:hover {
 
 .depsrow {
   display: flex;
+  align-items: center;
+  border-radius: 5px;
+}
+
+.depsrow:hover {
+  background: var(--panel2);
+}
+
+.depsgo {
+  display: flex;
   gap: 6px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   background: none;
   border: 0;
   color: var(--fg);
   font: inherit;
   padding: 4px 6px;
-  border-radius: 5px;
   cursor: pointer;
 }
 
-.depsrow:hover {
+.depsgo:disabled {
+  cursor: default;
+  color: var(--dim);
+}
+
+.depsx {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 6px;
+  opacity: 0;
+}
+
+.depsrow:hover .depsx {
+  opacity: 1;
+}
+
+.depsx:hover {
+  color: var(--hot);
+}
+
+.depsfoot {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.depsfoot .kadd {
+  align-self: flex-start;
+}
+
+.depssearch input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.depssearch input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.depsresults {
+  display: flex;
+  flex-direction: column;
+  margin-top: 3px;
+}
+
+.depsresult {
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.depsresult:hover {
   background: var(--panel2);
+  color: var(--accent);
 }
 
 @media (max-width: 640px) {

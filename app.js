@@ -42,7 +42,6 @@ const ACTIONS = {
   setSched: { group: "Selected item", label: "set scheduled date", sel: true, run: ({ sel }) => askSched(sel) },
   setDue: { group: "Selected item", label: "set due date", sel: true, run: ({ sel }) => askDue(sel) },
   setRepeat: { group: "Selected item", label: "set repeat", sel: true, run: ({ sel }) => askRepeat(sel) },
-  blockers: { group: "Selected item", label: "manage blockers", sel: true, run: ({ sel }) => openBlockerPicker(sel) },
   setProject: { group: "Selected item", label: "set project", sel: true, run: ({ sel }) => openSetProject(sel) },
   editTitle: { group: "Selected item", label: "edit title", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "title" }; render(); } },
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
@@ -64,8 +63,8 @@ const DEFAULT_BINDINGS = {
   down: ["j", "ArrowDown"], up: ["k", "ArrowUp"], bottom: ["G"],
   search: ["/"], filterProject: ["p"], clearFilters: ["\\"], help: ["?"],
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
-  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], blockers: ["b"], setProject: ["P"],
-  editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: ["."],
+  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["P"],
+  editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
   moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
@@ -1533,6 +1532,57 @@ function closeDeps() {
   render();
 }
 
+function walkInto(id) {
+  state._depsTrail.push(state.deps);
+  state.deps = id;
+  render();
+}
+
+// inline "find a task and link it" field for one column of the deps overlay
+function depsSearchEl(placeholder, eligible, onPick) {
+  const box = document.createElement("div");
+  box.className = "depssearch";
+  const inp = document.createElement("input");
+  inp.placeholder = placeholder;
+  const results = document.createElement("div");
+  results.className = "depsresults";
+  const refresh = () => {
+    results.innerHTML = "";
+    const q = inp.value.trim().toLowerCase();
+    if (!q) return;
+    const hits = eligible()
+      .filter((t) => (t.title || "").toLowerCase().includes(q))
+      .slice(0, 6);
+    for (const t of hits) {
+      const r = document.createElement("button");
+      r.className = "depsresult";
+      r.textContent = t.title || "(untitled)";
+      r.onmousedown = (e) => {
+        e.preventDefault(); // fire before the input's blur
+        onPick(t);
+      };
+      results.append(r);
+    }
+    if (!hits.length) {
+      const e = document.createElement("div");
+      e.className = "note";
+      e.textContent = "no match";
+      results.append(e);
+    }
+  };
+  inp.oninput = refresh;
+  inp.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      inp.value = "";
+      refresh();
+      inp.blur();
+    }
+  };
+  box.append(inp, results);
+  return box;
+}
+
 function depsEl() {
   const byId = new Map(state.model.items.filter((i) => i.id).map((i) => [i.id, i]));
   const it = byId.get(state.deps);
@@ -1576,8 +1626,8 @@ function depsEl() {
   cols.className = "depscols";
   box.append(cols);
 
-  const entries = []; // for number-key selection
-  const col = (label, list, describe) => {
+  const entries = []; // ids in render order, for number-key walk-in
+  const col = (label, list, describe, unlink, footer) => {
     const c = document.createElement("div");
     c.className = "depscol";
     const h = document.createElement("h3");
@@ -1590,40 +1640,110 @@ function depsEl() {
       c.append(e);
     }
     for (const entry of list) {
-      const r = document.createElement("button");
-      r.className = "depsrow";
+      const row = document.createElement("div");
+      row.className = "depsrow";
       const n = entries.length + 1;
-      r.innerHTML = `<span class="pnum">${n < 10 ? n : ""}</span>`;
-      r.append(document.createTextNode(describe(entry)));
-      r.onclick = () => {
-        if (entry.id) {
-          state._depsTrail.push(state.deps);
-          state.deps = entry.id;
-          render();
-        }
-      };
+      const go = document.createElement("button");
+      go.className = "depsgo";
+      go.innerHTML = `<span class="pnum">${n < 10 ? n : ""}</span>`;
+      go.append(document.createTextNode(describe(entry)));
+      go.disabled = !entry.id;
+      go.onclick = () => entry.id && walkInto(entry.id);
+      row.append(go);
+      const x = document.createElement("button");
+      x.className = "depsx";
+      x.textContent = "✕";
+      x.title = "unlink";
+      x.onclick = () => mutate(() => unlink(entry));
+      row.append(x);
       entries.push(entry.id || null);
-      c.append(r);
+      c.append(row);
     }
+    c.append(footer);
     return c;
   };
 
+  const linkedIds = new Set(it.needs);
+  const openTasks = () => state.model.items.filter((t) => t.id && !t.done && t.id !== it.id);
+
+  // waiting on — its needs:
   const needs = it.needs.map((nid) => byId.get(nid) || { dangling: nid });
-  cols.append(
-    col("waiting on", needs, (x) =>
-      x.dangling ? `⚠ unknown: ${x.dangling}` : `${x.done ? "✓ " : x._blockedBy?.length ? "🔒 " : "○ "}${x.title || "(untitled)"}`
+  const waitFoot = document.createElement("div");
+  waitFoot.className = "depsfoot";
+  waitFoot.append(
+    depsSearchEl(
+      "find a task that blocks this…",
+      () => openTasks().filter((t) => !linkedIds.has(t.id)),
+      (t) => {
+        mutate(() => it.needs.push(t.id));
+      }
     )
   );
+  const newBlk = document.createElement("button");
+  newBlk.className = "kadd";
+  newBlk.textContent = "＋ new task that blocks this";
+  newBlk.onclick = () => {
+    const sel = it;
+    state.deps = null;
+    state._depsTrail = [];
+    createLinkedItem(sel, "blocking");
+  };
+  waitFoot.append(newBlk);
   cols.append(
-    col("blocking", it._blocking || [], (x) => {
-      const ready = !x.done && x._blockedBy.filter((b) => b.id !== it.id).every((b) => b.done);
-      return `${x.done ? "✓ " : ready ? "▸ " : "· "}${x.title || "(untitled)"}`;
-    })
+    col(
+      "waiting on",
+      needs,
+      (x) =>
+        x.dangling
+          ? `⚠ unknown: ${x.dangling}`
+          : `${x.done ? "✓ " : x._blockedBy?.length ? "🔒 " : "○ "}${x.title || "(untitled)"}`,
+      (x) => {
+        it.needs = it.needs.filter((nid) => nid !== (x.id || x.dangling));
+      },
+      waitFoot
+    )
+  );
+
+  // blocking — tasks whose needs: point here
+  const depFoot = document.createElement("div");
+  depFoot.className = "depsfoot";
+  depFoot.append(
+    depsSearchEl(
+      "find a task that depends on this…",
+      () => openTasks().filter((t) => !t.needs.includes(it.id)),
+      (t) => {
+        mutate(() => t.needs.push(it.id));
+      }
+    )
+  );
+  const newDep = document.createElement("button");
+  newDep.className = "kadd";
+  newDep.textContent = "＋ new task that depends on this";
+  newDep.onclick = () => {
+    const sel = it;
+    state.deps = null;
+    state._depsTrail = [];
+    createLinkedItem(sel, "dependent");
+  };
+  depFoot.append(newDep);
+  cols.append(
+    col(
+      "blocking",
+      it._blocking || [],
+      (x) => {
+        const ready = !x.done && x._blockedBy.filter((b) => b.id !== it.id).every((b) => b.done);
+        return `${x.done ? "✓ " : ready ? "▸ " : "· "}${x.title || "(untitled)"}`;
+      },
+      (x) => {
+        x.needs = x.needs.filter((nid) => nid !== it.id);
+      },
+      depFoot
+    )
   );
 
   const hint = document.createElement("p");
   hint.className = "hint";
-  hint.textContent = "number → walk into it · title → select in list · Backspace → back · Esc → close";
+  hint.textContent = "number → walk in · ✕ → unlink · title → select in list · Backspace → back · Esc → close";
   box.append(hint);
   wrap._entries = entries;
   return wrap;
@@ -1696,48 +1816,6 @@ function createLinkedItem(sel, direction) {
     state.selectedId = it.id;
     state.editing = { id: it.id, mode: "title" };
   });
-}
-
-// `b` — manage what blocks the selected item: toggle existing open tasks, or
-// spin up a new blocking / dependent task. No ids to remember.
-function openBlockerPicker(sel) {
-  const build = () => [
-    { value: "new-blocking", label: "＋ new task that blocks this", action: true, always: true },
-    { value: "new-dependent", label: "＋ new task that depends on this", action: true, always: true },
-    ...state.model.items
-      .filter((it) => it.id && it.id !== sel.id && !it.done)
-      .map((it) => ({
-        value: it.id,
-        label: it.title || "(untitled)",
-        dot: it.projects[0] ? projColor(it.projects[0]) : null,
-        hint: it.projects[0] ? "+" + it.projects[0] : "",
-        checked: sel.needs.includes(it.id),
-      })),
-  ];
-  openPicker(
-    `Blockers for "${sel.title || "untitled"}"`,
-    build(),
-    0,
-    (value) => {
-      if (value === "new-blocking") {
-        state.picker = null;
-        createLinkedItem(sel, "blocking");
-        return "close";
-      }
-      if (value === "new-dependent") {
-        state.picker = null;
-        createLinkedItem(sel, "dependent");
-        return "close";
-      }
-      mutate(() => {
-        const at = sel.needs.indexOf(value);
-        if (at >= 0) sel.needs.splice(at, 1);
-        else sel.needs.push(value);
-      });
-      return false; // keep the picker open for more toggles
-    },
-    { filterable: true, keepOpen: true, rebuild: build }
-  );
 }
 
 // ---------- action helpers (called from ACTIONS) ----------

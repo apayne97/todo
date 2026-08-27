@@ -92,7 +92,7 @@ Edit them on the Projects view (`7`).
 
 Press `?` in the app for the full list. Highlights: `j`/`k` move, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `e` edit title,
-`E` whole line, `n` note, `l` link, `b` blockers, `P` set project, `p` filter
+`E` whole line, `n` note, `l` link, `.`/`b` dependency overlay, `P` set project, `p` filter
 by project (numbered — `p` then a digit), `\` clear filters, `a` add,
 `c` quick-capture, `u` undo.
 
