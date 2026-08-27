@@ -52,8 +52,7 @@ const ACTIONS = {
   del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
   undo: { group: "Selected item", label: "undo", run: () => undo() },
 
-  add: { group: "Create", label: "add item here", run: () => addItem("context") },
-  addInbox: { group: "Create", label: "add to Inbox", run: () => addItem("inbox") },
+  add: { group: "Create", label: "add item here", run: () => addItem() },
   capture: { group: "Create", label: "quick capture", run: () => openCapture() },
   newBlocking: { group: "Create", label: "new task that blocks this", sel: true, run: ({ sel }) => createLinkedItem(sel, "blocking") },
   newDependent: { group: "Create", label: "new task that depends on this", sel: true, run: ({ sel }) => createLinkedItem(sel, "dependent") },
@@ -66,7 +65,7 @@ const DEFAULT_BINDINGS = {
   setSched: ["s"], setDue: ["d"], setRepeat: ["r"], blockers: ["b"], setProject: ["P"],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"],
   moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
-  add: ["a"], addInbox: ["A"], capture: ["c"],
+  add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
 };
 
@@ -212,10 +211,11 @@ function mutate(fn) {
   recompute();
   scheduleSave();
   render();
-  // if the change pushed the selected item out of view (bump, done, reschedule…),
-  // land on whatever slid into its place so you can keep working down the list
+  // if the change pushed the selected item out of view (bump, done, delete…),
+  // move to the item that took its slot — i.e. the next one down — or nothing if
+  // it was at the end of the list
   if (prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
-    state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] || null;
+    state.selectedId = state._flat[prevIdx] ?? null;
     render();
     document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
   }
@@ -1364,25 +1364,21 @@ function selectEdge(dir) {
   render();
 }
 
-function addItem(mode) {
+// Add a task inline: after the selected row (as a sibling), or at the top.
+// Picks up the current view's date context and the active project filter.
+function addItem() {
   mutate(() => {
     const it = P.parse("- [ ] new task").items[0];
     it.title = "";
     it.created = todayISO();
     const items = state.model.items;
-    if (mode === "inbox") {
-      const firstDone = items.findIndex((x) => x.done && x.depth === 0);
-      items.splice(firstDone < 0 ? items.length : firstDone, 0, it);
-    } else {
-      const sel = selectedItem();
-      if (sel) {
-        const [, end] = subtreeRange(sel);
-        it.depth = sel.depth;
-        items.splice(end, 0, it);
-      } else items.unshift(it);
-      if (state.view === "today") it.sched = todayISO();
-      if (state.view === "week") it.sched = todayISO();
-    }
+    const sel = selectedItem();
+    if (sel) {
+      const [, end] = subtreeRange(sel);
+      it.depth = sel.depth;
+      items.splice(end, 0, it);
+    } else items.unshift(it);
+    if (state.view === "today" || state.view === "week") it.sched = todayISO();
     if (state.projectFilter) it.projects = [state.projectFilter];
     P.ensureIds(items);
     state.selectedId = it.id;
@@ -1566,10 +1562,8 @@ function indentItem(it, dir) {
 
 function deleteItem(it) {
   const [i, e] = subtreeRange(it);
-  const flat = state._flat;
-  const pos = flat.indexOf(it.id);
   state.model.items.splice(i, e - i);
-  state.selectedId = flat[Math.max(0, pos - 1)] || null;
+  // mutate() moves the selection to the next row down (or nothing) after re-render
 }
 
 document.addEventListener("keydown", (e) => {

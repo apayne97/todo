@@ -124,6 +124,12 @@ always show in **Review**.
 Project filter (`p`) and text search (`/`) layer on top of any view.
 Dates render relative: "Mon", "in 3d", "2d overdue" (red).
 
+**Review** is the "needs a decision" screen — a not-done item shows there if it is
+any of: overdue (`sched` in the past), bumped at least once (`bumps ≥ 1`), undated
+(no `sched` and no `due` — same set as Inbox), blocked by an unfinished `needs:`
+task, or has a broken dependency (`needs:` points at an unknown id, or a cycle).
+Everything that's flowing cleanly — scheduled, unblocked, not slipping — stays out.
+
 ## Projects
 
 Project descriptions and info live in a `## Projects` section at the end of
@@ -182,9 +188,10 @@ Defaults:
 `P` set project · `e`/`Enter` edit title · `E` edit whole line · `n` note ·
 `l` link · `J`/`K` reorder · `#` delete · `u` undo
 
-**Create:** `a` add here (prefills `sched:today` in Today/Week) · `A` Inbox ·
-`c` quick-capture · `B` new task that blocks the selected one · `D` new task that
-depends on it
+**Create:** `a` add here — inline, after the selection, prefills `sched:today` in
+Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any
+view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
+selected one · `D` new task that depends on it
 
 **Not rebindable:** `1`–`8` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
 `Esc` (graduated back-out: clear filters → deselect → close) · Projects view
@@ -196,10 +203,11 @@ straight to that project (`1` = All projects = clear filter). Filterable pickers
 
 ## Selection
 
-`mutate()` records the selected row's list position before the change; if that
-row leaves the view afterwards (bump, done, reschedule, project change…) the
-selection lands on whatever slid into its slot, so you can keep working straight
-down the list without scrolling back.
+`mutate()` records the selected row's list index before the change; if that row
+leaves the view afterwards (bump, done, delete, reschedule, project change…) the
+selection moves to the row that took its slot — the next one down — or clears if
+it was at the end of the list. Keeps you working straight down without scrolling
+back.
 
 ## Undo
 
