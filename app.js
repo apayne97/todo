@@ -8,7 +8,7 @@ const VIEWS = [
   ["upcoming", "Upcoming"],
   ["inbox", "Inbox"],
   ["done", "Done"],
-  ["review", "Review"],
+  ["blocked", "Blocked"],
   ["projects", "Projects"],
   ["shortcuts", "Shortcuts"],
 ];
@@ -375,6 +375,21 @@ function editProjectColor(name) {
 
 // ---------- filtering ----------
 
+// blockers all satisfied but the item still carries a needs: — it was gated and is now free
+function isReady(it) {
+  return (
+    !it.done &&
+    it.needs.length > 0 &&
+    it._blockedBy.length === 0 &&
+    !it._cycle &&
+    it._dangling.length === 0
+  );
+}
+
+function isOverdue(it) {
+  return !it.done && ((it.sched && it.sched < todayISO()) || (it.due && it.due < todayISO()));
+}
+
 function viewMatch(it, view, t, we) {
   if (view === "done") return it.done;
   if (it.done) return false;
@@ -384,15 +399,11 @@ function viewMatch(it, view, t, we) {
   if (view === "week") return !it.isBlocked && ((s && s <= we) || (d && d <= we));
   if (view === "upcoming") return (s && s > we) || (!s && d && d > we);
   if (view === "inbox") return !s && !d && !it.isBlocked;
-  if (view === "review")
-    return (
-      (s && s < t) ||
-      (it.bumps || 0) >= 1 ||
-      (!s && !d) ||
-      it.isBlocked ||
-      it._dangling.length > 0 ||
-      it._cycle
-    );
+  if (view === "blocked") {
+    if (it.isBlocked || it._dangling.length > 0) return true;
+    // "ready" items that aren't already surfaced in Today/This Week
+    return isReady(it) && !((s && s <= we) || (d && d <= we));
+  }
   return false;
 }
 
@@ -502,12 +513,16 @@ function rowEl(it) {
   if (it.sched && !(state.view === "today" && it.sched <= todayISO()))
     row.append(chip(relDay(it.sched), "sched"));
   if (it.repeat) row.append(chip("↻ " + it.repeat.kind + it.repeat.n + it.repeat.u, "rep"));
-  if ((it.bumps || 0) > 0) row.append(chip("⤴" + it.bumps, "bump", `bumped ${it.bumps}×`));
-  if (it.isBlocked) {
-    const names = it._blockedBy.map((b) => b.title).concat(it._cycle ? ["(dependency cycle)"] : []);
+  if ((it.bumps || 0) > 0) {
+    const heat = it.bumps >= 5 ? " hot" : it.bumps >= 3 ? " warm" : "";
+    row.append(chip("⤴" + it.bumps, "bump" + heat, `bumped ${it.bumps}×`));
+  }
+  if (it.isBlocked && !it._cycle) {
+    const names = it._blockedBy.map((b) => b.title);
     row.append(chip("🔒", "lock", "blocked by: " + names.join(", ")));
   }
-  if (it._dangling.length) row.append(chip("needs?", "warn", "unknown ids: " + it._dangling.join(", ")));
+  if (it._cycle) row.append(chip("⚠ cycle", "bad", "this item is in a dependency cycle"));
+  if (it._dangling.length) row.append(chip("⚠ broken dep", "bad", "needs: " + it._dangling.join(", ") + " — no such task"));
   if (it.link) row.append(linkChip(it.link));
   const noteText = getNote(it);
   if (noteText) {
@@ -610,6 +625,22 @@ function selectItem(id) {
   render();
 }
 
+function sectionHeadEl(text) {
+  const h = document.createElement("div");
+  h.className = "dayhead";
+  h.textContent = text;
+  return h;
+}
+
+function walkRows(roots, main) {
+  const walk = (it) => {
+    state._flat.push(it.id);
+    main.append(rowEl(it));
+    for (const c of it.children) walk(c);
+  };
+  for (const r of roots) walk(r);
+}
+
 function renderList(main) {
   const roots = visibleRoots();
   state._flat = [];
@@ -620,12 +651,56 @@ function renderList(main) {
     main.append(e);
     return;
   }
-  const walk = (it) => {
-    state._flat.push(it.id);
-    main.append(rowEl(it));
-    for (const c of it.children) walk(c);
+  // Today: overdue items float to the top under their own header
+  if (state.view === "today") {
+    const overdue = roots.filter((r) => anyDesc(r, isOverdue));
+    const rest = roots.filter((r) => !anyDesc(r, isOverdue));
+    if (overdue.length) {
+      main.append(sectionHeadEl(`overdue · ${overdue.length}`));
+      walkRows(overdue, main);
+    }
+    if (rest.length) {
+      if (overdue.length) main.append(sectionHeadEl("today"));
+      walkRows(rest, main);
+    }
+    return;
+  }
+  walkRows(roots, main);
+}
+
+// ---------- blocked view ----------
+
+function renderBlocked(main) {
+  state._flat = [];
+  const roots = visibleRoots();
+  if (!roots.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "Nothing blocked, nothing broken.";
+    main.append(e);
+    return;
+  }
+  const groups = { ready: [], blocked: [], problem: [] };
+  for (const r of roots) {
+    if (anyDesc(r, (x) => x._dangling.length > 0 || x._cycle)) groups.problem.push(r);
+    else if (anyDesc(r, (x) => x._blockedBy.length > 0)) groups.blocked.push(r);
+    else groups.ready.push(r);
+  }
+  const section = (key, title, hint) => {
+    if (!groups[key].length) return;
+    main.append(sectionHeadEl(`${title} · ${groups[key].length}`));
+    if (hint) {
+      const h = document.createElement("div");
+      h.className = "note";
+      h.style.padding = "0 16px 4px";
+      h.textContent = hint;
+      main.append(h);
+    }
+    walkRows(groups[key], main);
   };
-  for (const r of roots) walk(r);
+  section("ready", "ready — blockers cleared");
+  section("blocked", "blocked");
+  section("problem", "problems", "needs: points at a task that no longer exists, or a dependency cycle");
 }
 
 // ---------- done view + graph ----------
@@ -1118,6 +1193,7 @@ function render() {
   if (state.view === "shortcuts") main.append(shortcutsEditorEl());
   else if (state.view === "projects") renderProjects(main);
   else if (state.view === "done") renderDone(main);
+  else if (state.view === "blocked") renderBlocked(main);
   else renderList(main);
   mainWrap.append(main);
   app.append(mainWrap);

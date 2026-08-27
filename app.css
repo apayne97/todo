@@ -233,6 +233,16 @@ header h1 {
   color: #d59bd5;
 }
 
+.chip.bump.warm {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.chip.bump.hot {
+  color: var(--hot);
+  border-color: var(--hot);
+}
+
 .chip.lock {
   border: 0;
 }
@@ -240,6 +250,12 @@ header h1 {
 .chip.warn {
   color: var(--warn);
   border-color: var(--warn);
+}
+
+.chip.bad {
+  color: var(--hot);
+  border-color: var(--hot);
+  font-weight: 600;
 }
 
 .chip.pri {

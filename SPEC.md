@@ -112,23 +112,32 @@ always show in **Review**.
 
 | # | View       | Contents                                                              |
 |---|------------|----------------------------------------------------------------------|
-| 1 | Today      | not done & (`sched ≤ today` or `due ≤ today`) + overdue, minus blocked |
+| 1 | Today      | not done & (`sched ≤ today` or `due ≤ today`), minus blocked — overdue items in a section at the top |
 | 2 | This Week  | `sched` or `due` on or before Sunday                                  |
 | 3 | Upcoming   | dated beyond this week                                                |
 | 4 | Inbox      | no `sched`, no `due`                                                  |
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
-| 6 | Review     | overdue + `bumps ≥ 1` + Inbox + blocked + dangling/cycle refs         |
+| 6 | Blocked    | items waiting on a dependency, plus a "ready" and a "problems" section |
 | 7 | Projects   | one card per project: description, info, live task counts             |
 | 8 | Shortcuts  | full keyboard reference                                               |
 
 Project filter (`p`) and text search (`/`) layer on top of any view.
 Dates render relative: "Mon", "in 3d", "2d overdue" (red).
 
-**Review** is the "needs a decision" screen — a not-done item shows there if it is
-any of: overdue (`sched` in the past), bumped at least once (`bumps ≥ 1`), undated
-(no `sched` and no `due` — same set as Inbox), blocked by an unfinished `needs:`
-task, or has a broken dependency (`needs:` points at an unknown id, or a cycle).
-Everything that's flowing cleanly — scheduled, unblocked, not slipping — stays out.
+**Today** puts overdue items (`sched` or `due` in the past) in an "overdue"
+section above the rest, so a slipping backlog is visible without a separate view.
+
+**Blocked** groups not-done items into:
+- **ready — blockers cleared** — a `needs:` list that's now fully satisfied, and
+  not already showing in Today/This Week. "This was gated, now do it."
+- **blocked** — an unfinished `needs:` task in the way. Shown with 🔒 and the
+  blocker's title.
+- **problems** — `needs:` points at a task that no longer exists, or a dependency
+  cycle. Flagged red (`⚠ broken dep` / `⚠ cycle`) here *and* wherever else the
+  item shows.
+
+There's no separate "bumped" view — the `⤴N` chip escalates colour instead
+(purple → amber at 3 → red at 5).
 
 ## Projects
 
