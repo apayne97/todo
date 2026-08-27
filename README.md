@@ -19,6 +19,18 @@ Tailscale, the phone reaches it at `http://<mac-name>:4444` from anywhere; add t
 the home screen for an app-like shell. The `pantheon` `preview_start todo` config
 just attaches to the running server.
 
+**Open it as a real app (no more fishing through Chrome tabs):** the page ships a
+web manifest + icon, so it's installable as a standalone window.
+
+- **Chrome/Edge:** open <http://localhost:4444>, then ⋮ menu → *Cast, save, and
+  share* → *Install page as app…* (older Chrome: *More tools* → *Create
+  shortcut…* → check *Open as window*). It gets a Dock icon and its own window —
+  launch it from Spotlight/Raycast/Dock like any app.
+- **Global hotkey:** Shortcuts.app → new shortcut → *Open App* → the installed
+  "todo" app → assign a keyboard shortcut in the shortcut's info panel. One chord
+  focuses-or-opens the single window from anywhere.
+- **iPhone:** Safari → Share → *Add to Home Screen*.
+
 **Autosave to git:**
 
 - `TODO_AUTOCOMMIT=1` — commit `todos.md` ~8s after the last edit. A burst of
