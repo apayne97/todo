@@ -90,10 +90,10 @@ Two mechanisms, matched to the two shapes dependencies take:
 
 **Managing blockers** — press `b` on an item to open a picker: type to filter the
 list of open tasks, Enter/click toggles one on or off as a blocker (✓), no ids to
-remember. Two entries at the top spin up a *new* task and wire the link:
-**"new task that blocks this"** (inserted before, this item `needs:` it) and
-**"new task that depends on this"** (inserted after, it `needs:` this item) — both
-drop straight into title-edit, inheriting project and the current view's date.
+remember. Two entries at the top spin up a *new* task and wire the link — same as
+the standalone `B` / `D` keys: **blocks this** (`B`, inserted before, this item
+`needs:` it) and **depends on this** (`D`, inserted after, it `needs:` this item)
+— both drop straight into title-edit, inheriting project and the current view's date.
 
 Blocked items render dimmed with 🔒, are hidden from Today / This Week / Inbox, and
 always show in **Review**.
@@ -183,7 +183,8 @@ Defaults:
 `l` link · `J`/`K` reorder · `#` delete · `u` undo
 
 **Create:** `a` add here (prefills `sched:today` in Today/Week) · `A` Inbox ·
-`c` quick-capture
+`c` quick-capture · `B` new task that blocks the selected one · `D` new task that
+depends on it
 
 **Not rebindable:** `1`–`8` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
 `Esc` (graduated back-out: clear filters → deselect → close) · Projects view

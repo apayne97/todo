@@ -55,6 +55,8 @@ const ACTIONS = {
   add: { group: "Create", label: "add item here", run: () => addItem("context") },
   addInbox: { group: "Create", label: "add to Inbox", run: () => addItem("inbox") },
   capture: { group: "Create", label: "quick capture", run: () => openCapture() },
+  newBlocking: { group: "Create", label: "new task that blocks this", sel: true, run: ({ sel }) => createLinkedItem(sel, "blocking") },
+  newDependent: { group: "Create", label: "new task that depends on this", sel: true, run: ({ sel }) => createLinkedItem(sel, "dependent") },
 };
 
 const DEFAULT_BINDINGS = {
@@ -65,6 +67,7 @@ const DEFAULT_BINDINGS = {
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"],
   moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], addInbox: ["A"], capture: ["c"],
+  newBlocking: ["B"], newDependent: ["D"],
 };
 
 // not rebindable — shown for reference on the Shortcuts page
@@ -1150,7 +1153,7 @@ function askEl() {
   };
   inp.onkeydown = (e) => {
     e.stopPropagation();
-    if (e.key === "Enter" && (!multi || e.metaKey || e.ctrlKey)) {
+    if (e.key === "Enter" && (!multi || e.shiftKey)) {
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
@@ -1177,7 +1180,7 @@ function askEl() {
     save.onclick = submit;
     const hint = document.createElement("span");
     hint.className = "hint";
-    hint.textContent = "⌘↵ to save · Esc to cancel";
+    hint.textContent = "⇧↵ to save · ↵ for a new line · Esc to cancel";
     bar.append(save, hint);
     box.append(bar);
   }
