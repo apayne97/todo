@@ -237,7 +237,10 @@ selection sticks to the task through repeat presses even after it leaves the vie
 **Create:** `a` add here — inline, after the selection, prefills `sched:today` in
 Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any
 view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
-selected one · `D` new task that depends on it
+selected one · `D` new task that depends on it · `F` follow-up: a dependent
+"follow up on <title>" task (leading "follow up on/with" stripped so chains don't
+stack), same project, `sched` +3 days — blocked until you've done the original, so
+it surfaces only once you've actually reached out
 
 **Not rebindable:** `1`–`9` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
 `Esc` (graduated back-out: clear filters → deselect → close) · Projects view

@@ -64,6 +64,7 @@ const ACTIONS = {
   capture: { group: "Create", label: "quick capture", run: () => openCapture() },
   newBlocking: { group: "Create", label: "new task that blocks this", sel: true, run: ({ sel }) => createLinkedItem(sel, "blocking") },
   newDependent: { group: "Create", label: "new task that depends on this", sel: true, run: ({ sel }) => createLinkedItem(sel, "dependent") },
+  followUp: { group: "Create", label: '"follow up on …" task, blocked on this, due in 3d', sel: true, run: ({ sel }) => createFollowUp(sel) },
 };
 
 const DEFAULT_BINDINGS = {
@@ -78,7 +79,7 @@ const DEFAULT_BINDINGS = {
   schedMinusMonth: ["("], schedPlusMonth: [")"],
   moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
-  newBlocking: ["B"], newDependent: ["D"],
+  newBlocking: ["B"], newDependent: ["D"], followUp: ["F"],
 };
 
 // not rebindable — shown for reference on the Shortcuts page
@@ -1870,6 +1871,30 @@ function createLinkedItem(sel, direction) {
     P.ensureIds(items);
     if (direction === "blocking") sel.needs.push(it.id);
     else it.needs.push(sel.id);
+    state.selectedId = it.id;
+    state.editing = { id: it.id, mode: "title" };
+  });
+}
+
+// "reach out to X" → a dependent "follow up on reach out to X" task, blocked on
+// the original and scheduled a few days out so it surfaces only once you've
+// actually made contact. Strips a leading "follow up on/with/re" first so a
+// chain of these stays "follow up on X", not "follow up on follow up on X".
+const FOLLOWUP_RE = /^\s*follow[-\s]?up\s+(?:on|with|re|about)\s+/i;
+function createFollowUp(sel) {
+  const base = (sel.title || "").replace(FOLLOWUP_RE, "").trim();
+  mutate(() => {
+    const items = state.model.items;
+    const it = P.parse("- [ ] new").items[0];
+    it.title = "follow up on " + base;
+    it.created = todayISO();
+    it.depth = sel.depth;
+    it.sched = P.iso(P.addDays(new Date(), 3));
+    if (sel.projects.length) it.projects = [sel.projects[0]];
+    const [, end] = subtreeRange(sel);
+    items.splice(end, 0, it);
+    P.ensureIds(items);
+    it.needs.push(sel.id);
     state.selectedId = it.id;
     state.editing = { id: it.id, mode: "title" };
   });

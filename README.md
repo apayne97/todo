@@ -106,7 +106,8 @@ Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `S` push dates to subtasks,
 `]`/`[` ±1 day · `}`/`{` ±1 week · `)`/`(` ±1 month, `e` edit title, `E` whole line,
 `n` note, `l` link, `.`/`b` dependency overlay, `p` set project,
-`P` filter by project, `\` clear filters, `a` add, `c` quick-capture, `u` undo.
+`P` filter by project, `\` clear filters, `a` add, `c` quick-capture,
+`F` follow-up task (blocked on this, +3d), `u` undo.
 Both project pickers are numbered — the letter then a digit jumps straight there.
 
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
