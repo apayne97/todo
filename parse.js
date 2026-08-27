@@ -118,6 +118,7 @@ function blankItem(depth, done) {
 }
 
 const LINK_RE = /^link:\s+(\S+)$/i;
+const COLOR_RE = /^color:\s+(\S.*)$/i;
 
 const TOKEN_TESTS = [
   /^\+[\w-]+$/,
@@ -204,13 +205,15 @@ export function parse(text) {
     if (section === "projects") {
       const ph = /^###\s+(.+?)\s*$/.exec(line);
       if (ph) {
-        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null };
+        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null, color: null };
         projects.push(curProject);
         continue;
       }
       if (!curProject || line.trim() === "") continue;
       const pl = LINK_RE.exec(line.trim());
       if (pl) { if (!curProject.link) curProject.link = pl[1]; continue; }
+      const pc = COLOR_RE.exec(line.trim());
+      if (pc) { if (!curProject.color) curProject.color = pc[1].trim(); continue; }
       const kv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
       if (kv) curProject.meta.push([kv[1], kv[2]]);
       else curProject.desc.push(line.trim());
@@ -246,6 +249,7 @@ export function parse(text) {
       desc: p.desc.join("\n"),
       meta: p.meta,
       link: p.link || "",
+      color: p.color || "",
     })),
   };
 }
@@ -300,7 +304,7 @@ export function serialize(model) {
   for (const r of done) emit(r);
 
   const projects = (model.projects || []).filter(
-    (p) => p.name && (p.desc.trim() || p.meta.length || (p.link || "").trim())
+    (p) => p.name && (p.desc.trim() || p.meta.length || (p.link || "").trim() || (p.color || "").trim())
   );
   if (projects.length) {
     out.push("");
@@ -309,6 +313,7 @@ export function serialize(model) {
     for (const p of projects) {
       out.push(`### ${p.name}`);
       if (p.desc.trim()) out.push(p.desc.trim());
+      if ((p.color || "").trim()) out.push(`color: ${p.color.trim()}`);
       if ((p.link || "").trim()) out.push(`link: ${p.link.trim()}`);
       for (const [k, v] of p.meta) out.push(`${k}: ${v}`);
       out.push("");

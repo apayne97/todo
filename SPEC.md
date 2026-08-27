@@ -134,18 +134,25 @@ Project descriptions and info live in a `## Projects` section at the end of
 
 ### grant
 NIH R01 renewal. First draft to OSP by March 1.
+color: #4da6e5
+link: https://notion.so/grant-board
 status: drafting
 lead: me
 ```
 
-`### name` starts a project; following lines are the description, except
-`key: value` lines which become structured info. A project exists as soon as a
-task is tagged `+name` — the `## Projects` entry only adds description/info, and
-empty entries are pruned on save. On the Projects view: `e` edits the description
-(multi-line), `n` edits the info lines, `a` creates a project, clicking the name
-filters the todo list by it. Creating a new item while a project filter is active
-tags it with that project automatically; `P` on any item sets its project (with a
-"new project" option).
+`### name` starts a project; following lines are the description, except the
+special `color:` / `link:` lines and `key: value` lines (structured info). A
+project exists as soon as a task is tagged `+name` — the `## Projects` entry only
+adds description / color / link / info, and entries with none of those are pruned
+on save. `color:` overrides the name-hashed default and applies everywhere the
+project's dot or chip shows; it accepts any CSS color (`#4da6e5`, `rebeccapurple`,
+`hsl(...)`).
+
+On the Projects view: `e` description (multi-line), `n` info lines, `l` link,
+`C` color (swatch picker + native color input), `a` new project, click the name
+to filter the list by it. Creating a new item while a project filter is active
+tags it with that project; `P` on any item sets its project (with a "new project"
+option).
 
 ## Done view + graph
 
@@ -168,7 +175,8 @@ tags it with that project automatically; `P` on any item sets its project (with 
 `e`/`Enter` edit title · `E` edit the whole line · `n` edit the note ·
 `l` edit the link · `J`/`K` reorder · `#` delete · `u` undo
 
-**Projects view:** `e`/`Enter` edit description · `n` edit info · `l` edit link · `a` new project
+**Projects view:** `e`/`Enter` edit description · `n` edit info · `l` edit link ·
+`C` edit color · `a` new project
 
 **Create:** `a` add in current context (prefills e.g. `sched:today` in Today) ·
 `A` add to Inbox · `c` quick-capture (global)

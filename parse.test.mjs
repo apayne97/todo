@@ -111,8 +111,21 @@ test("round-trips a Projects section", () => {
 
 test("empty project entries are pruned on serialize", () => {
   const model = P.parse("# Todos\n\n- [ ] x id:a1\n\n## Done\n");
-  model.projects.push({ name: "ghost", desc: "", meta: [], link: "" });
+  model.projects.push({ name: "ghost", desc: "", meta: [], link: "", color: "" });
   assert.doesNotMatch(P.serialize(model), /ghost/);
+});
+
+test("project color round-trips and survives with nothing else", () => {
+  const src = "# Todos\n\n- [ ] t +grant id:a1\n\n## Done\n\n## Projects\n\n### grant\ncolor: #e5484d\nlead: me\n";
+  const model = P.parse(src);
+  assert.equal(model.projects[0].color, "#e5484d");
+  assert.deepEqual(model.projects[0].meta, [["lead", "me"]]);
+  const again = P.parse(P.serialize(model));
+  assert.equal(again.projects[0].color, "#e5484d");
+
+  const colorOnly = P.parse("# Todos\n\n- [ ] t +p id:a1\n\n## Done\n");
+  colorOnly.projects.push({ name: "p", desc: "", meta: [], link: "", color: "#4da6e5" });
+  assert.match(P.serialize(colorOnly), /### p\ncolor: #4da6e5/);
 });
 
 test("link: lines round-trip on items and projects", () => {

@@ -52,6 +52,7 @@ const KEYMAP = [
     ["e / Enter", "edit description"],
     ["n", "edit info (key: value lines)"],
     ["l", "edit link (URL)"],
+    ["C", "edit color"],
     ["a", "new project"],
   ]],
 ];
@@ -213,11 +214,22 @@ function allProjects() {
   return [...s].sort();
 }
 
-function projColor(name) {
+function autoColor(name) {
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h} 50% 58%)`;
 }
+
+function projColor(name) {
+  return projectEntry(name)?.color || autoColor(name);
+}
+
+// curated swatches for the color picker — spread around the wheel, tuned for the dark theme
+const SWATCHES = [
+  "#e5484d", "#e5844d", "#e0c04a", "#a5c261",
+  "#5ec26b", "#4dc2a8", "#4da6e5", "#6a7ee5",
+  "#9b6ae5", "#c96ae5", "#e56aa8", "#8b93a1",
+];
 
 function projectEntry(name) {
   return state.model.projects.find((p) => p.name === name) || null;
@@ -226,17 +238,18 @@ function projectEntry(name) {
 function ensureProjectEntry(name) {
   let e = projectEntry(name);
   if (!e) {
-    e = { name, desc: "", meta: [], link: "" };
+    e = { name, desc: "", meta: [], link: "", color: "" };
     state.model.projects.push(e);
   }
   if (e.link == null) e.link = "";
+  if (e.color == null) e.color = "";
   return e;
 }
 
-// name + description + info + live task counts, for the Projects view
+// name + description + info + color + live task counts, for the Projects view
 function projectSummaries() {
   return allProjects().map((name) => {
-    const e = projectEntry(name) || { name, desc: "", meta: [], link: "" };
+    const e = projectEntry(name) || { name, desc: "", meta: [], link: "", color: "" };
     const mine = state.model.items.filter((it) => it.projects.includes(name));
     const open = mine.filter((i) => !i.done);
     return {
@@ -244,6 +257,7 @@ function projectSummaries() {
       desc: e.desc,
       meta: e.meta,
       link: e.link || "",
+      color: e.color || "",
       open: open.length,
       done: mine.filter((i) => i.done).length,
       blocked: open.filter((i) => i.isBlocked).length,
@@ -259,6 +273,24 @@ function editProjectLink(name) {
       ensureProjectEntry(name).link = v.trim();
     })
   );
+}
+
+function editProjectColor(name) {
+  const cur = projectEntry(name)?.color || "";
+  const opts = [
+    { value: "", label: "auto (from name)", dot: autoColor(name), checked: !cur },
+    ...SWATCHES.map((hex) => ({ value: hex, label: hex, dot: hex, checked: cur.toLowerCase() === hex })),
+    { value: "__custom__", label: "custom…", action: true, always: true },
+  ];
+  openPicker(`${name} — color`, opts, Math.max(0, opts.findIndex((o) => o.checked)), (v) => {
+    if (v === "__custom__") {
+      askColor(`${name} — pick a color`, cur || autoColor(name), (hex) =>
+        mutate(() => (ensureProjectEntry(name).color = hex))
+      );
+      return;
+    }
+    mutate(() => (ensureProjectEntry(name).color = v));
+  });
 }
 
 // ---------- filtering ----------
@@ -703,7 +735,7 @@ function renderProjects(main) {
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
-  hint.textContent = "e description · n info · l link · a new project · click name to filter";
+  hint.textContent = "e description · n info · l link · C color · a new project · click name to filter";
   main.append(hint);
 
   if (!rows.length) {
@@ -943,8 +975,14 @@ function askEl() {
   const box = document.createElement("div");
   box.className = "askbox";
   box.innerHTML = `<label>${state.ask.label}</label>`;
+  const isColor = state.ask.color;
   const inp = document.createElement(multi ? "textarea" : "input");
-  inp.value = state.ask.initial || "";
+  if (isColor) {
+    inp.type = "color";
+    inp.value = /^#[0-9a-f]{6}$/i.test(state.ask.initial || "") ? state.ask.initial : "#4da6e5";
+  } else {
+    inp.value = state.ask.initial || "";
+  }
   if (multi) inp.rows = 5;
   const submit = () => {
     const cb = state.ask.onSubmit;
@@ -962,7 +1000,17 @@ function askEl() {
       render();
     }
   };
+  if (isColor) inp.onchange = submit;
   box.append(inp);
+  if (isColor) {
+    const bar = document.createElement("div");
+    bar.className = "askbar";
+    const save = document.createElement("button");
+    save.textContent = "Use this color";
+    save.onclick = submit;
+    bar.append(save);
+    box.append(bar);
+  }
   if (multi) {
     const bar = document.createElement("div");
     bar.className = "askbar";
@@ -987,6 +1035,11 @@ function askEl() {
 
 function askText(label, initial, onSubmit) {
   state.ask = { label, initial, onSubmit, multiline: true };
+  render();
+}
+
+function askColor(label, initial, onSubmit) {
+  state.ask = { label, initial, onSubmit, color: true };
   render();
 }
 
@@ -1349,7 +1402,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (k === "G") return selectEdge(1);
 
-  if (state.view === "projects" && ["e", "Enter", "n", "l", "a"].includes(k)) {
+  if (state.view === "projects" && ["e", "Enter", "n", "l", "C", "a"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -1360,6 +1413,7 @@ document.addEventListener("keydown", (e) => {
     if (!state.selectedId) return;
     if (k === "n") return editProjectMeta(state.selectedId);
     if (k === "l") return editProjectLink(state.selectedId);
+    if (k === "C") return editProjectColor(state.selectedId);
     return editProjectDesc(state.selectedId);
   }
 
