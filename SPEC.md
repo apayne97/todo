@@ -180,6 +180,9 @@ option).
 - Cycle-time callouts for long-lived items (age at completion).
 - "Finished despite N bumps" badge.
 - **Recurring toggle: All / Only recurring / Only one-off.**
+- Rows are selectable — click the ✓ or select + press the toggle-done key to
+  **un-complete** an item; it drops back into your active list wherever its
+  dates put it (Inbox if it has none).
 
 ## Keyboard map
 

@@ -756,6 +756,7 @@ function renderDone(main) {
   main.append(statsEl(filtered));
 
   // grouped list, newest first
+  state._flat = [];
   const byDay = new Map();
   for (const it of filtered) {
     if (!byDay.has(it.doneDate)) byDay.set(it.doneDate, []);
@@ -768,12 +769,19 @@ function renderDone(main) {
     h.textContent = P.parseISO(day).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
     main.append(h);
     for (const it of byDay.get(day)) {
+      state._flat.push(it.id);
       const row = document.createElement("div");
-      row.className = "row done";
+      row.className = "row done" + (it.id === state.selectedId ? " sel" : "");
       row.style.paddingLeft = "10px";
-      const b = document.createElement("span");
+      row.onclick = () => selectItem(it.id);
+      const b = document.createElement("button");
       b.className = "box";
       b.textContent = "✓";
+      b.title = "mark not done — moves it back to your active list";
+      b.onclick = (e) => {
+        e.stopPropagation();
+        mutate(() => P.toggleDone(state.model, it.id, todayISO()));
+      };
       row.append(b);
       const t = document.createElement("span");
       t.className = "title";
