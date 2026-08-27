@@ -71,7 +71,11 @@ test("needs: makes an item blocked until its blocker is done", () => {
     "# Todos\n\n- [ ] blocker id:b1\n- [ ] dependent needs:b1 id:d2\n\n## Done\n"
   );
   P.computeStatus(model, "2026-08-26");
-  assert.equal(model.items.find((i) => i.id === "d2").isBlocked, true);
+  const b1 = model.items.find((i) => i.id === "b1");
+  const d2 = model.items.find((i) => i.id === "d2");
+  assert.equal(d2.isBlocked, true);
+  assert.deepEqual(d2._blockedBy.map((x) => x.id), ["b1"]);
+  assert.deepEqual(b1._blocking.map((x) => x.id), ["d2"]); // reverse edge
   P.toggleDone(model, "b1", "2026-08-26");
   P.computeStatus(model, "2026-08-26");
   assert.equal(model.items.find((i) => i.id === "d2").isBlocked, false);

@@ -96,7 +96,16 @@ the standalone `B` / `D` keys: **blocks this** (`B`, inserted before, this item
 — both drop straight into title-edit, inheriting project and the current view's date.
 
 Blocked items render dimmed with 🔒, are hidden from Today / This Week / Inbox, and
-always show in **Review**.
+always show in **Blocked**.
+
+**Seeing the dependency graph.** `computeStatus` records both directions —
+`it._blockedBy` (what it waits on) and `it._blocking` (what waits on it). A row
+with N not-done dependents shows a green **`⛓ N`** chip — the counterpart to 🔒,
+i.e. "N tasks are waiting on me." Press **`.`** (or click the chip) for a
+two-column overlay centred on the selected item: **waiting on** (its `needs:`, ✓
+done / 🔒 itself blocked / ○ ready) and **blocking** (dependents, ▸ = would be
+ready if this were done). Number keys walk into an entry, Backspace walks back,
+the title selects that task in the list, Esc closes.
 
 ### Recurring — behavior on check-off
 

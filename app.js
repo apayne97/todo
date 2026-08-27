@@ -48,6 +48,7 @@ const ACTIONS = {
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
   editNote: { group: "Selected item", label: "edit note", sel: true, run: ({ sel }) => editNote(sel) },
   editLink: { group: "Selected item", label: "edit link", sel: true, run: ({ sel }) => editLink(sel) },
+  deps: { group: "Selected item", label: "dependency tree (waiting on / blocking)", sel: true, run: ({ sel }) => { state.deps = sel.id; state._depsTrail = []; render(); } },
   moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1), { coalesce: "reorder", reorderOnly: true }) },
   moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1), { coalesce: "reorder", reorderOnly: true }) },
   del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
@@ -64,7 +65,7 @@ const DEFAULT_BINDINGS = {
   search: ["/"], filterProject: ["p"], clearFilters: ["\\"], help: ["?"],
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
   setSched: ["s"], setDue: ["d"], setRepeat: ["r"], blockers: ["b"], setProject: ["P"],
-  editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"],
+  editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: ["."],
   moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
@@ -96,6 +97,8 @@ const state = {
   ask: null, // { label, initial, onSubmit }
   picker: null, // { title, options, hi, onPick }
   capturingKey: null, // action name being rebound on the Shortcuts page
+  deps: null, // id of the item whose dependency tree is on screen
+  _depsTrail: [], // walk history for the deps overlay
   toastMsg: null,
   _flat: [],
   _focusEl: null,
@@ -550,6 +553,18 @@ function rowEl(it) {
   }
   if (it._cycle) row.append(chip("⚠ cycle", "bad", "this item is in a dependency cycle"));
   if (it._dangling.length) row.append(chip("⚠ broken dep", "bad", "needs: " + it._dangling.join(", ") + " — no such task"));
+  const waiting = (it._blocking || []).filter((b) => !b.done).length;
+  if (waiting) {
+    const c = chip("⛓ " + waiting, "deps", `${waiting} task${waiting > 1 ? "s" : ""} depend on this — press . for the tree`);
+    c.style.cursor = "pointer";
+    c.onclick = (e) => {
+      e.stopPropagation();
+      selectItem(it.id);
+      state.deps = it.id;
+      render();
+    };
+    row.append(c);
+  }
   if (it.link) row.append(linkChip(it.link));
   const noteText = getNote(it);
   if (noteText) {
@@ -1295,6 +1310,7 @@ function render() {
   if (state.ask) app.append(askEl());
   if (state.picker) app.append(pickerEl());
   if (state.overlay === "help") app.append(helpEl());
+  if (state.deps) app.append(depsEl());
   if (state.toastMsg) {
     const tt = document.createElement("div");
     tt.className = "toast";
@@ -1507,6 +1523,109 @@ function helpEl() {
       render();
     }
   };
+  return wrap;
+}
+
+// two-column dependency view for the focused item (state.deps)
+function closeDeps() {
+  state.deps = null;
+  state._depsTrail = [];
+  render();
+}
+
+function depsEl() {
+  const byId = new Map(state.model.items.filter((i) => i.id).map((i) => [i.id, i]));
+  const it = byId.get(state.deps);
+  const wrap = document.createElement("div");
+  wrap.className = "ask";
+  wrap.onclick = (e) => {
+    if (e.target === wrap) closeDeps();
+  };
+  const box = document.createElement("div");
+  box.className = "askbox wide deps";
+  wrap.append(box);
+  if (!it) {
+    box.textContent = "gone.";
+    return wrap;
+  }
+
+  const head = document.createElement("div");
+  head.className = "depshead";
+  if (state._depsTrail.length) {
+    const back = document.createElement("button");
+    back.className = "kbd";
+    back.textContent = "← back";
+    back.onclick = () => {
+      state.deps = state._depsTrail.pop();
+      render();
+    };
+    head.append(back);
+  }
+  const title = document.createElement("button");
+  title.className = "depstitle";
+  title.textContent = (it.done ? "✓ " : "") + (it.title || "(untitled)");
+  title.title = "select this task in the list";
+  title.onclick = () => {
+    selectItem(it.id);
+    closeDeps();
+  };
+  head.append(title);
+  box.append(head);
+
+  const cols = document.createElement("div");
+  cols.className = "depscols";
+  box.append(cols);
+
+  const entries = []; // for number-key selection
+  const col = (label, list, describe) => {
+    const c = document.createElement("div");
+    c.className = "depscol";
+    const h = document.createElement("h3");
+    h.textContent = `${label} · ${list.length}`;
+    c.append(h);
+    if (!list.length) {
+      const e = document.createElement("div");
+      e.className = "note";
+      e.textContent = "—";
+      c.append(e);
+    }
+    for (const entry of list) {
+      const r = document.createElement("button");
+      r.className = "depsrow";
+      const n = entries.length + 1;
+      r.innerHTML = `<span class="pnum">${n < 10 ? n : ""}</span>`;
+      r.append(document.createTextNode(describe(entry)));
+      r.onclick = () => {
+        if (entry.id) {
+          state._depsTrail.push(state.deps);
+          state.deps = entry.id;
+          render();
+        }
+      };
+      entries.push(entry.id || null);
+      c.append(r);
+    }
+    return c;
+  };
+
+  const needs = it.needs.map((nid) => byId.get(nid) || { dangling: nid });
+  cols.append(
+    col("waiting on", needs, (x) =>
+      x.dangling ? `⚠ unknown: ${x.dangling}` : `${x.done ? "✓ " : x._blockedBy?.length ? "🔒 " : "○ "}${x.title || "(untitled)"}`
+    )
+  );
+  cols.append(
+    col("blocking", it._blocking || [], (x) => {
+      const ready = !x.done && x._blockedBy.filter((b) => b.id !== it.id).every((b) => b.done);
+      return `${x.done ? "✓ " : ready ? "▸ " : "· "}${x.title || "(untitled)"}`;
+    })
+  );
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "number → walk into it · title → select in list · Backspace → back · Esc → close";
+  box.append(hint);
+  wrap._entries = entries;
   return wrap;
 }
 
@@ -1816,6 +1935,27 @@ document.addEventListener("keydown", (e) => {
     if (k === "Escape" || actionForKey(k) === "help") {
       state.overlay = null;
       render();
+    }
+    return;
+  }
+
+  if (state.deps) {
+    if (k === "Escape" || actionForKey(k) === "deps") return closeDeps();
+    if (k === "Backspace") {
+      if (state._depsTrail.length) {
+        state.deps = state._depsTrail.pop();
+        render();
+      } else closeDeps();
+      return;
+    }
+    if (/^[1-9]$/.test(k)) {
+      const id = document.querySelector(".ask")?._entries?.[Number(k) - 1];
+      if (id) {
+        state._depsTrail.push(state.deps);
+        state.deps = id;
+        render();
+      }
+      return;
     }
     return;
   }

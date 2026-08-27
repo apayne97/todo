@@ -348,10 +348,16 @@ export function computeStatus(model, todayISO) {
   for (const it of items) {
     it._blockedBy = [];
     it._dangling = [];
+    it._blocking = []; // items whose needs: point at this one
+  }
+  for (const it of items) {
     for (const nid of it.needs) {
       const t = byId.get(nid);
       if (!t) it._dangling.push(nid);
-      else if (!t.done) it._blockedBy.push(t);
+      else {
+        if (!t.done) it._blockedBy.push(t);
+        t._blocking.push(it);
+      }
     }
   }
 

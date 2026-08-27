@@ -258,6 +258,11 @@ header h1 {
   font-weight: 600;
 }
 
+.chip.deps {
+  color: var(--good);
+  border-color: var(--good);
+}
+
 .chip.pri {
   font-weight: 700;
   color: var(--bg);
@@ -538,6 +543,69 @@ button.kbd:hover {
 
 .askbox.wide {
   width: 720px;
+}
+
+/* dependency overlay */
+.depshead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.depstitle {
+  background: none;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.depstitle:hover {
+  color: var(--accent);
+}
+
+.depscols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.depscol h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin: 0 0 6px;
+}
+
+.depsrow {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.depsrow:hover {
+  background: var(--panel2);
+}
+
+@media (max-width: 640px) {
+  .depscols {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
 }
 
 .askbox label {
