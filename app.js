@@ -43,6 +43,12 @@ const ACTIONS = {
   setDue: { group: "Selected item", label: "set due date", sel: true, run: ({ sel }) => askDue(sel) },
   setRepeat: { group: "Selected item", label: "set repeat", sel: true, run: ({ sel }) => askRepeat(sel) },
   syncDates: { group: "Selected item", label: "give subtasks this item's dates", sel: true, run: ({ sel }) => syncSubtaskDates(sel) },
+  schedMinusDay: { group: "Nudge schedule", label: "−1 day", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "d") },
+  schedPlusDay: { group: "Nudge schedule", label: "+1 day", sel: true, run: ({ sel }) => nudgeSched(sel, 1, "d") },
+  schedMinusWeek: { group: "Nudge schedule", label: "−1 week", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "w") },
+  schedPlusWeek: { group: "Nudge schedule", label: "+1 week", sel: true, run: ({ sel }) => nudgeSched(sel, 1, "w") },
+  schedMinusMonth: { group: "Nudge schedule", label: "−1 month", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "m") },
+  schedPlusMonth: { group: "Nudge schedule", label: "+1 month", sel: true, run: ({ sel }) => nudgeSched(sel, 1, "m") },
   setProject: { group: "Selected item", label: "set project", sel: true, run: ({ sel }) => openSetProject(sel) },
   editTitle: { group: "Selected item", label: "edit title", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "title" }; render(); } },
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
@@ -67,6 +73,9 @@ const DEFAULT_BINDINGS = {
   setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
   syncDates: ["S"],
+  schedMinusDay: ["["], schedPlusDay: ["]"],
+  schedMinusWeek: ["{"], schedPlusWeek: ["}"],
+  schedMinusMonth: ["("], schedPlusMonth: [")"],
   moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
   add: ["a"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"],
@@ -264,6 +273,8 @@ const _coalesce = {};
 //   share one undo step (so a burst of reorders undoes as a unit)
 // opts.reorderOnly: true when the model's order changed but nothing else —
 //   skips computeStatus and only re-renders the list, not the whole shell
+// opts.keepSel: don't chase the selection to a new row if the current one left
+//   the view — for repeat-press actions (nudge) that keep operating on one task
 function mutate(fn, opts = {}) {
   const now = Date.now();
   const merge = opts.coalesce && now - (_coalesce[opts.coalesce] || 0) < 700;
@@ -281,7 +292,7 @@ function mutate(fn, opts = {}) {
   // if the change pushed the selected item out of view (bump, done, delete…),
   // move to the row that took its slot — the next one down — or, if it was the
   // last row, the new last row. Only clears when the list is now empty.
-  if (prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
+  if (!opts.keepSel && prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
     state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] ?? null;
     paint();
   }
@@ -1942,6 +1953,16 @@ function syncSubtaskDates(sel) {
     }
   });
   toast(`${n} subtask${n > 1 ? "s" : ""} → ${sel.sched ? relDay(sel.sched) : "no date"}`);
+}
+
+// Shift the selected item's schedule by a relative amount, from its current
+// sched (or from today if it has none). Doesn't touch bumps: — a deliberate
+// reschedule, not a "push it off" bump. keepSel so you can hold on one task and
+// press [ / ] repeatedly even after it scrolls out of the current view.
+function nudgeSched(sel, n, unit) {
+  const base = sel.sched ? P.parseISO(sel.sched) : new Date();
+  mutate(() => (sel.sched = P.iso(P.addUnit(base, n, unit))), { coalesce: "nudge", keepSel: true });
+  toast(`"${(sel.title || "task").slice(0, 28)}" → ${relDay(sel.sched)}`);
 }
 
 function openSetProject(sel) {

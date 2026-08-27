@@ -229,6 +229,11 @@ Defaults:
 `p` set project · `e`/`Enter` edit title · `E` edit whole line · `n` note ·
 `l` link · `J` reorder up · `K` reorder down · `#` delete · `u` undo
 
+**Nudge schedule** (relative to the item's current `sched`, or today if unset;
+no `bumps++`): `]` / `[` ±1 day · `}` / `{` ±1 week · `)` / `(` ±1 month. The
+selection sticks to the task through repeat presses even after it leaves the view
+(watch the toast); a burst shares one undo step.
+
 **Create:** `a` add here — inline, after the selection, prefills `sched:today` in
 Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any
 view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
