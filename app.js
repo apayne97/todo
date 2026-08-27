@@ -207,10 +207,18 @@ async function save() {
 function mutate(fn) {
   state.undo.push(P.serialize(state.model));
   if (state.undo.length > 50) state.undo.shift();
+  const prevIdx = state._flat.indexOf(state.selectedId);
   fn();
   recompute();
   scheduleSave();
   render();
+  // if the change pushed the selected item out of view (bump, done, reschedule…),
+  // land on whatever slid into its place so you can keep working down the list
+  if (prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
+    state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] || null;
+    render();
+    document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+  }
 }
 
 function undo() {

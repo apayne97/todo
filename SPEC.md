@@ -194,6 +194,13 @@ depends on it
 straight to that project (`1` = All projects = clear filter). Filterable pickers
 (blockers) take type-to-filter instead.
 
+## Selection
+
+`mutate()` records the selected row's list position before the change; if that
+row leaves the view afterwards (bump, done, reschedule, project change…) the
+selection lands on whatever slid into its slot, so you can keep working straight
+down the list without scrolling back.
+
 ## Undo
 
 In-memory stack of the last ~50 mutations, each storing the prior raw line(s).
