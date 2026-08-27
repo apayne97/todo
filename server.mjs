@@ -6,7 +6,10 @@
 // Env:
 //   TODO_PORT           override port (default 4444)
 //   TODO_FILE           path to the markdown ground truth (default ./todos.md)
-//   TODO_AUTOCOMMIT=1   git-commit the file a few seconds after each write
+//   TODO_AUTOCOMMIT=1   git-commit todos.md ~8s after the last edit (a burst of
+//                       edits becomes one "todo: autosave <date> <time>" commit).
+//   TODO_AUTOPUSH=1     also push after committing (implies TODO_AUTOCOMMIT);
+//                       rebases onto any concurrent push before retrying.
 //
 // API:
 //   GET  /todos   -> { text, etag }        etag is the file mtime
@@ -29,7 +32,8 @@ const argVal = (flag) => {
 
 const PORT = Number(argVal("--port") || process.env.TODO_PORT || 4444);
 const FILE = resolve(HERE, argVal("--file") || process.env.TODO_FILE || "todos.md");
-const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT === "1";
+const AUTOPUSH = process.env.TODO_AUTOPUSH === "1";
+const AUTOCOMMIT = AUTOPUSH || process.env.TODO_AUTOCOMMIT === "1";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -52,19 +56,43 @@ async function etagOf(path) {
 const run = (cmd, cmdArgs, opts) =>
   new Promise((res) => execFile(cmd, cmdArgs, opts, (err, stdout, stderr) => res({ err, stdout, stderr })));
 
+const pad = (n) => String(n).padStart(2, "0");
+function stamp(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+let committing = false;
 let commitTimer = null;
+
+// Debounced (see scheduleCommit): a burst of edits collapses into one commit.
+async function autosave() {
+  if (committing) return scheduleCommit();
+  committing = true;
+  try {
+    const repo = await run("git", ["rev-parse", "--show-toplevel"], { cwd: HERE });
+    if (repo.err) return;
+    const g = (a) => run("git", ["-C", repo.stdout.trim(), ...a.filter((x) => x != null)]);
+
+    await g(["add", "--", FILE]);
+    if (!(await g(["diff", "--cached", "--quiet", "--", FILE])).err) return; // nothing changed
+
+    await g(["commit", "-m", `todo: autosave ${stamp()}`, "--", FILE]);
+    if (!AUTOPUSH) return;
+
+    // Other Claude sessions may share this repo — rebase onto any concurrent push.
+    if ((await g(["push", "origin", "main"])).err) {
+      await g(["pull", "--rebase", "--autostash", "origin", "main"]);
+      await g(["push", "origin", "main"]);
+    }
+  } finally {
+    committing = false;
+  }
+}
+
 function scheduleCommit() {
   if (!AUTOCOMMIT) return;
   clearTimeout(commitTimer);
-  commitTimer = setTimeout(async () => {
-    const repo = await run("git", ["rev-parse", "--show-toplevel"], { cwd: HERE });
-    if (repo.err) return;
-    const root = repo.stdout.trim();
-    await run("git", ["-C", root, "add", FILE]);
-    const diff = await run("git", ["-C", root, "diff", "--cached", "--quiet", "--", FILE]);
-    if (!diff.err) return; // nothing staged
-    await run("git", ["-C", root, "commit", "-m", "todo: sync", "--", FILE]);
-  }, 8000);
+  commitTimer = setTimeout(() => void autosave(), 8000);
 }
 
 function send(res, status, body, headers = {}) {
@@ -136,5 +164,21 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`todo app   http://localhost:${PORT}`);
   console.log(`ground truth ${FILE}`);
-  console.log(`autocommit ${AUTOCOMMIT ? "on" : "off (set TODO_AUTOCOMMIT=1 to enable)"}`);
+  console.log(
+    `autocommit ${
+      AUTOPUSH ? "on + push" : AUTOCOMMIT ? "on (local; set TODO_AUTOPUSH=1 to push)" : "off (set TODO_AUTOCOMMIT=1)"
+    }`
+  );
 });
+
+// flush pending edits on the way out
+let closing = false;
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, async () => {
+    if (closing) process.exit(0);
+    closing = true;
+    clearTimeout(commitTimer);
+    if (AUTOCOMMIT) await autosave();
+    process.exit(0);
+  });
+}

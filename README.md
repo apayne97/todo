@@ -11,14 +11,22 @@ cd ~/life/todo && npm start
 ```
 
 Then open <http://localhost:4444>. In Claude Code (from the `pantheon` repo) you
-can also `preview_start` the `todo` launch config.
+can also `preview_start` the `todo` launch config — that runs with `TODO_AUTOPUSH=1`.
 
-Set `TODO_AUTOCOMMIT=1` to have the server `git commit` `todos.md` a few seconds
-after each change:
+**Autosave to git:**
+
+- `TODO_AUTOCOMMIT=1` — commit `todos.md` ~8s after the last edit. A burst of
+  edits (checking off three things, adding two) becomes one
+  `todo: autosave 2026-08-26 14:32` commit. Filter with
+  `git log --grep autosave --since "3 days ago"`.
+- `TODO_AUTOPUSH=1` — also push (implies autocommit). Rebases onto any concurrent
+  push first, so a code commit from another session is never clobbered.
 
 ```bash
-TODO_AUTOCOMMIT=1 npm start
+TODO_AUTOPUSH=1 npm start
 ```
+
+Storage isn't a concern — git delta-compresses these tiny diffs to almost nothing.
 
 ## How it works
 
