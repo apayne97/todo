@@ -15,46 +15,65 @@ const VIEWS = [
 
 const NO_COUNT = ["done", "projects", "shortcuts"];
 
-const KEYMAP = [
-  ["Navigate", [
-    ["j / k", "move selection"],
-    ["g g / G", "jump to top / bottom"],
-    ["1–8", "switch view"],
-    ["/", "search"],
-    ["p", "filter by project (list)"],
-    ["Esc", "close / deselect"],
-  ]],
-  ["Selected item", [
-    ["x", "toggle done"],
-    ["T", "reschedule to today"],
-    ["t", "reschedule to tomorrow"],
-    ["w", "bump to next Monday (bumps++)"],
-    ["s", "set scheduled date"],
-    ["d", "set due date"],
-    ["r", "set repeat (+1w / .3d)"],
-    ["b", "manage blockers — pick a task or add one"],
-    ["P", "set project (or make a new one)"],
-    ["Tab / Shift-Tab", "indent / outdent as subtask"],
-    ["e / Enter", "edit the title"],
-    ["E", "edit the whole line (tokens)"],
-    ["n", "edit the note"],
-    ["l", "edit the link (URL)"],
-    ["J / K", "reorder"],
-    ["#  or  Delete", "delete"],
-    ["u", "undo"],
-  ]],
-  ["Create", [
-    ["a", "add item here"],
-    ["A", "add to Inbox"],
-    ["c", "quick capture (anywhere)"],
-  ]],
-  ["Projects view", [
-    ["e / Enter", "edit description"],
-    ["n", "edit info (key: value lines)"],
-    ["l", "edit link (URL)"],
-    ["C", "edit color"],
-    ["a", "new project"],
-  ]],
+// Every rebindable shortcut. `sel: true` = needs a selected item. `run({ sel })`.
+const ACTIONS = {
+  down: { group: "Navigate", label: "move down", run: () => moveSel(1) },
+  up: { group: "Navigate", label: "move up", run: () => moveSel(-1) },
+  bottom: { group: "Navigate", label: "jump to bottom", run: () => selectEdge(1) },
+  search: { group: "Navigate", label: "search", run: () => openSearch() },
+  filterProject: { group: "Navigate", label: "filter by project", run: () => openProjectFilter() },
+  clearFilters: {
+    group: "Navigate",
+    label: "clear search + project filter",
+    run: () => {
+      if (!state.search && !state.projectFilter) return;
+      state.search = "";
+      state.projectFilter = null;
+      render();
+    },
+  },
+  help: { group: "Navigate", label: "toggle keyboard help", run: () => toggleHelp() },
+
+  toggleDone: { group: "Selected item", label: "toggle done", sel: true, run: ({ sel }) => mutate(() => P.toggleDone(state.model, sel.id, todayISO())) },
+  today: { group: "Selected item", label: "reschedule to today", sel: true, run: ({ sel }) => mutate(() => (sel.sched = todayISO())) },
+  tomorrow: { group: "Selected item", label: "reschedule to tomorrow", sel: true, run: ({ sel }) => mutate(() => (sel.sched = P.iso(P.addDays(new Date(), 1)))) },
+  nextWeek: { group: "Selected item", label: "bump to next Monday", sel: true, run: ({ sel }) => mutate(() => bump(sel, P.iso(P.nextMonday()))) },
+  setSched: { group: "Selected item", label: "set scheduled date", sel: true, run: ({ sel }) => askSched(sel) },
+  setDue: { group: "Selected item", label: "set due date", sel: true, run: ({ sel }) => askDue(sel) },
+  setRepeat: { group: "Selected item", label: "set repeat", sel: true, run: ({ sel }) => askRepeat(sel) },
+  blockers: { group: "Selected item", label: "manage blockers", sel: true, run: ({ sel }) => openBlockerPicker(sel) },
+  setProject: { group: "Selected item", label: "set project", sel: true, run: ({ sel }) => openSetProject(sel) },
+  editTitle: { group: "Selected item", label: "edit title", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "title" }; render(); } },
+  editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
+  editNote: { group: "Selected item", label: "edit note", sel: true, run: ({ sel }) => editNote(sel) },
+  editLink: { group: "Selected item", label: "edit link", sel: true, run: ({ sel }) => editLink(sel) },
+  moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1)) },
+  moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1)) },
+  del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
+  undo: { group: "Selected item", label: "undo", run: () => undo() },
+
+  add: { group: "Create", label: "add item here", run: () => addItem("context") },
+  addInbox: { group: "Create", label: "add to Inbox", run: () => addItem("inbox") },
+  capture: { group: "Create", label: "quick capture", run: () => openCapture() },
+};
+
+const DEFAULT_BINDINGS = {
+  down: ["j", "ArrowDown"], up: ["k", "ArrowUp"], bottom: ["G"],
+  search: ["/"], filterProject: ["p"], clearFilters: ["\\"], help: ["?"],
+  toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
+  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], blockers: ["b"], setProject: ["P"],
+  editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"],
+  moveDown: ["J"], moveUp: ["K"], del: ["#", "Delete"], undo: ["u"],
+  add: ["a"], addInbox: ["A"], capture: ["c"],
+};
+
+// not rebindable — shown for reference on the Shortcuts page
+const FIXED_KEYS = [
+  ["1–8", "switch view"],
+  ["g g", "jump to top"],
+  ["Tab / Shift-Tab", "indent / outdent as subtask"],
+  ["Esc", "clear filters, then deselect, then close"],
+  ["Projects view: e n l C a", "description · info · link · color · new project"],
 ];
 
 const state = {
@@ -73,6 +92,7 @@ const state = {
   editing: null, // { id, mode: "title" | "full" }
   ask: null, // { label, initial, onSubmit }
   picker: null, // { title, options, hi, onPick }
+  capturingKey: null, // action name being rebound on the Shortcuts page
   toastMsg: null,
   _flat: [],
   _focusEl: null,
@@ -81,6 +101,55 @@ const state = {
 
 const todayISO = () => P.iso(new Date());
 const $ = (sel, el = document) => el.querySelector(sel);
+
+// ---------- key bindings ----------
+
+function loadBindings() {
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem("todo.keys") || "{}");
+  } catch {}
+  const b = {};
+  for (const act of Object.keys(ACTIONS)) {
+    b[act] = Array.isArray(stored[act]) ? stored[act] : DEFAULT_BINDINGS[act] || [];
+  }
+  return b;
+}
+
+let BINDINGS = loadBindings();
+
+function saveBindings() {
+  try {
+    localStorage.setItem("todo.keys", JSON.stringify(BINDINGS));
+  } catch {}
+}
+
+function resetBindings() {
+  try {
+    localStorage.removeItem("todo.keys");
+  } catch {}
+  BINDINGS = loadBindings();
+}
+
+function actionForKey(k) {
+  for (const act of Object.keys(BINDINGS)) if (BINDINGS[act].includes(k)) return act;
+  return null;
+}
+
+// bind key k to action act, removing it from whatever had it
+function bindKey(act, k) {
+  for (const a of Object.keys(BINDINGS)) BINDINGS[a] = BINDINGS[a].filter((x) => x !== k);
+  BINDINGS[act] = [...BINDINGS[act], k];
+  saveBindings();
+}
+
+function unbindKey(act, k) {
+  BINDINGS[act] = BINDINGS[act].filter((x) => x !== k);
+  saveBindings();
+}
+
+const KEY_LABELS = { " ": "Space", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Enter: "↵", Escape: "Esc", Backspace: "⌫", Delete: "Del", Tab: "Tab" };
+const keyLabel = (k) => KEY_LABELS[k] || k;
 
 // ---------- data ----------
 
@@ -855,20 +924,109 @@ function newProjectName(onName) {
 
 // ---------- shortcuts view + overlay ----------
 
+function actionGroups() {
+  const groups = {};
+  for (const [name, a] of Object.entries(ACTIONS)) {
+    (groups[a.group] ||= []).push([name, a]);
+  }
+  return groups;
+}
+
+// read-only list, for the ? overlay
 function keymapEl() {
   const wrap = document.createElement("div");
   wrap.className = "keymap";
-  for (const [group, rows] of KEYMAP) {
+  for (const [group, entries] of Object.entries(actionGroups())) {
     const h = document.createElement("h3");
     h.textContent = group;
     wrap.append(h);
-    for (const [keys, desc] of rows) {
+    for (const [name, a] of entries) {
       const r = document.createElement("div");
       r.className = "krow";
-      r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
+      const keys = BINDINGS[name].map(keyLabel).join(" / ") || "—";
+      r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${a.label}</span>`;
       wrap.append(r);
     }
   }
+  const h = document.createElement("h3");
+  h.textContent = "Fixed";
+  wrap.append(h);
+  for (const [keys, desc] of FIXED_KEYS) {
+    const r = document.createElement("div");
+    r.className = "krow";
+    r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
+    wrap.append(r);
+  }
+  return wrap;
+}
+
+// editable version, for the Shortcuts view
+function shortcutsEditorEl() {
+  const wrap = document.createElement("div");
+  wrap.className = "keymap editor";
+
+  const bar = document.createElement("div");
+  bar.className = "dayhead";
+  bar.textContent = state.capturingKey
+    ? `press a key for "${ACTIONS[state.capturingKey].label}"  ·  Esc to cancel`
+    : "click a key to remove it · + to add · bindings are saved in this browser";
+  wrap.append(bar);
+
+  for (const [group, entries] of Object.entries(actionGroups())) {
+    const h = document.createElement("h3");
+    h.textContent = group;
+    wrap.append(h);
+    for (const [name, a] of entries) {
+      const r = document.createElement("div");
+      r.className = "krow edit" + (state.capturingKey === name ? " capturing" : "");
+      const keys = document.createElement("span");
+      keys.className = "kkeys";
+      for (const key of BINDINGS[name]) {
+        const b = document.createElement("button");
+        b.className = "kbd";
+        b.textContent = keyLabel(key);
+        b.title = "remove";
+        b.onclick = () => {
+          unbindKey(name, key);
+          render();
+        };
+        keys.append(b);
+      }
+      const add = document.createElement("button");
+      add.className = "kadd";
+      add.textContent = state.capturingKey === name ? "press a key…" : "＋";
+      add.onclick = () => {
+        state.capturingKey = state.capturingKey === name ? null : name;
+        render();
+      };
+      keys.append(add);
+      r.append(keys);
+      const label = document.createElement("span");
+      label.textContent = a.label;
+      r.append(label);
+      wrap.append(r);
+    }
+  }
+
+  const h = document.createElement("h3");
+  h.textContent = "Fixed (not editable)";
+  wrap.append(h);
+  for (const [keys, desc] of FIXED_KEYS) {
+    const r = document.createElement("div");
+    r.className = "krow";
+    r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
+    wrap.append(r);
+  }
+
+  const reset = document.createElement("button");
+  reset.className = "kreset";
+  reset.textContent = "Reset all to defaults";
+  reset.onclick = () => {
+    resetBindings();
+    state.capturingKey = null;
+    render();
+  };
+  wrap.append(reset);
   return wrap;
 }
 
@@ -946,7 +1104,7 @@ function render() {
 
   const main = document.createElement("div");
   main.className = "main";
-  if (state.view === "shortcuts") main.append(keymapEl());
+  if (state.view === "shortcuts") main.append(shortcutsEditorEl());
   else if (state.view === "projects") renderProjects(main);
   else if (state.view === "done") renderDone(main);
   else renderList(main);
@@ -1101,6 +1259,12 @@ function pickerEl() {
   vis.forEach((o, i) => {
     const row = document.createElement("div");
     row.className = "pickrow" + (i === p.hi ? " hi" : "") + (o.action ? " action" : "");
+    if (p.numbered && i < 9) {
+      const num = document.createElement("span");
+      num.className = "pnum";
+      num.textContent = i + 1;
+      row.append(num);
+    }
     if (o.checked != null) {
       const c = document.createElement("span");
       c.className = "pcheck";
@@ -1280,6 +1444,83 @@ function openBlockerPicker(sel) {
   );
 }
 
+// ---------- action helpers (called from ACTIONS) ----------
+
+function openSearch() {
+  ask("search", state.search, (v) => {
+    state.search = v.trim();
+    render();
+  });
+}
+
+function openProjectFilter() {
+  const opts = [
+    { value: null, label: "All projects" },
+    ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
+  ];
+  const cur = opts.findIndex((o) => o.value === state.projectFilter);
+  openPicker("Filter by project", opts, cur < 0 ? 0 : cur, (v) => {
+    state.projectFilter = v;
+    render();
+  }, { numbered: true });
+}
+
+function openCapture() {
+  ask("quick capture", "", (v) => {
+    if (!v.trim()) return;
+    mutate(() => {
+      const it = P.parse("- [ ] " + normalizeDatesInText(v)).items[0];
+      it.created = todayISO();
+      if (state.projectFilter && !it.projects.length) it.projects = [state.projectFilter];
+      const firstDone = state.model.items.findIndex((x) => x.done && x.depth === 0);
+      state.model.items.splice(firstDone < 0 ? state.model.items.length : firstDone, 0, it);
+      P.ensureIds(state.model.items);
+      state.selectedId = it.id;
+    });
+  });
+}
+
+function toggleHelp() {
+  state.overlay = state.overlay === "help" ? null : "help";
+  render();
+}
+
+function askSched(sel) {
+  ask("scheduled date", sel.sched || "", (v) =>
+    mutate(() => (sel.sched = v.trim() ? P.parseDateInput(v, todayISO()) : null))
+  );
+}
+
+function askDue(sel) {
+  ask("due date", sel.due || "", (v) =>
+    mutate(() => (sel.due = v.trim() ? P.parseDateInput(v, todayISO()) : null))
+  );
+}
+
+function askRepeat(sel) {
+  ask(
+    "repeat  ( +1w from schedule · .3d from completion · blank clears )",
+    sel.repeat ? `${sel.repeat.kind}${sel.repeat.n}${sel.repeat.u}` : "",
+    (v) => {
+      const rep = parseRepeat(v);
+      if (rep !== undefined) mutate(() => (sel.repeat = rep));
+    }
+  );
+}
+
+function openSetProject(sel) {
+  const opts = [
+    { value: "", label: "(no project)" },
+    ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
+    { value: "__new__", label: "＋ new project…", action: true, always: true },
+  ];
+  const cur = opts.findIndex((o) => o.value === (sel.projects[0] || ""));
+  openPicker("Set project", opts, cur < 0 ? 0 : cur, (v) => {
+    if (v === "__new__") return newProjectName((name) => mutate(() => (sel.projects = [name])));
+    mutate(() => (sel.projects = v ? [v] : []));
+  });
+}
+
 function reorder(it, dir) {
   const items = state.model.items;
   const [i, e] = subtreeRange(it);
@@ -1329,6 +1570,21 @@ document.addEventListener("keydown", (e) => {
   // Stop a shortcut key from also being typed into an input we're about to focus.
   if (k.length === 1 && k !== " " && !e.metaKey && !e.ctrlKey && !e.altKey) e.preventDefault();
 
+  // rebinding a shortcut on the Shortcuts page: capture the next key
+  if (state.capturingKey) {
+    e.preventDefault();
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(k)) return;
+    const act = state.capturingKey;
+    state.capturingKey = null;
+    if (k === "Escape") return render();
+    if (/^[1-8]$/.test(k) || k === "g" || k === "Tab" || k === " ") {
+      toast(`${keyLabel(k)} is reserved`);
+      return render();
+    }
+    bindKey(act, k);
+    return render();
+  }
+
   if (state.picker) {
     const p = state.picker;
     const vis = pickerVisible();
@@ -1364,34 +1620,36 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  if (k === "?") {
-    state.overlay = state.overlay === "help" ? null : "help";
-    return render();
-  }
   if (state.overlay) {
-    if (k === "Escape") {
+    if (k === "Escape" || actionForKey(k) === "help") {
       state.overlay = null;
       render();
     }
     return;
   }
+
+  // Esc: graduated back-out — filters, then selection
   if (k === "Escape") {
-    state.selectedId = null;
-    return render();
+    if (state.search || state.projectFilter) {
+      state.search = "";
+      state.projectFilter = null;
+      return render();
+    }
+    if (state.selectedId) {
+      state.selectedId = null;
+      return render();
+    }
+    return;
   }
+
+  // view switching (not rebindable)
   if (/^[1-8]$/.test(k) && Number(k) <= VIEWS.length) {
     state.view = VIEWS[Number(k) - 1][0];
     state.selectedId = null;
     return render();
   }
-  if (k === "j" || k === "ArrowDown") {
-    e.preventDefault();
-    return moveSel(1);
-  }
-  if (k === "k" || k === "ArrowUp") {
-    e.preventDefault();
-    return moveSel(-1);
-  }
+
+  // g g chord → top (not rebindable)
   if (k === "g") {
     const now = Date.now();
     if (now - state._lastG < 450) {
@@ -1400,8 +1658,18 @@ document.addEventListener("keydown", (e) => {
     } else state._lastG = now;
     return;
   }
-  if (k === "G") return selectEdge(1);
 
+  // Tab / Shift-Tab indent (not rebindable — modifier based)
+  if (k === "Tab") {
+    const sel = selectedItem();
+    if (sel) {
+      e.preventDefault();
+      mutate(() => indentItem(sel, e.shiftKey ? -1 : 1));
+    }
+    return;
+  }
+
+  // Projects view: contextual keys (not rebindable)
   if (state.view === "projects" && ["e", "Enter", "n", "l", "C", "a"].includes(k)) {
     e.preventDefault();
     if (k === "a")
@@ -1417,108 +1685,14 @@ document.addEventListener("keydown", (e) => {
     return editProjectDesc(state.selectedId);
   }
 
-  if (k === "/") {
+  // rebindable actions
+  const actName = actionForKey(k);
+  if (actName) {
+    const act = ACTIONS[actName];
+    const sel = act.sel ? selectedItem() : null;
+    if (act.sel && !sel) return;
     e.preventDefault();
-    return ask("search", state.search, (v) => {
-      state.search = v.trim();
-      render();
-    });
-  }
-  if (k === "p") {
-    e.preventDefault();
-    const opts = [
-      { value: null, label: "All projects" },
-      ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
-    ];
-    const cur = opts.findIndex((o) => o.value === state.projectFilter);
-    return openPicker("Filter by project", opts, cur < 0 ? 0 : cur, (v) => {
-      state.projectFilter = v;
-      render();
-    });
-  }
-  if (k === "c") {
-    e.preventDefault();
-    return ask("quick capture", "", (v) => {
-      if (!v.trim()) return;
-      mutate(() => {
-        const it = P.parse("- [ ] " + normalizeDatesInText(v)).items[0];
-        it.created = todayISO();
-        if (state.projectFilter && !it.projects.length) it.projects = [state.projectFilter];
-        const firstDone = state.model.items.findIndex((x) => x.done && x.depth === 0);
-        state.model.items.splice(firstDone < 0 ? state.model.items.length : firstDone, 0, it);
-        P.ensureIds(state.model.items);
-        state.selectedId = it.id;
-      });
-    });
-  }
-  if (k === "a") {
-    e.preventDefault();
-    return addItem("context");
-  }
-  if (k === "A") {
-    e.preventDefault();
-    return addItem("inbox");
-  }
-  if (k === "u") return undo();
-
-  const sel = selectedItem();
-  if (!sel) return;
-
-  if (k === "x") return mutate(() => P.toggleDone(state.model, sel.id, todayISO()));
-  if (k === "w") return mutate(() => bump(sel, P.iso(P.nextMonday())));
-  if (k === "t") return mutate(() => (sel.sched = P.iso(P.addDays(new Date(), 1))));
-  if (k === "T") return mutate(() => (sel.sched = todayISO()));
-  if (k === "s")
-    return ask("scheduled date", sel.sched || "", (v) =>
-      mutate(() => (sel.sched = v.trim() ? P.parseDateInput(v, todayISO()) : null))
-    );
-  if (k === "d")
-    return ask("due date", sel.due || "", (v) =>
-      mutate(() => (sel.due = v.trim() ? P.parseDateInput(v, todayISO()) : null))
-    );
-  if (k === "r")
-    return ask("repeat  ( +1w from schedule · .3d from completion · blank clears )", sel.repeat ? `${sel.repeat.kind}${sel.repeat.n}${sel.repeat.u}` : "", (v) => {
-      const rep = parseRepeat(v);
-      if (rep !== undefined) mutate(() => (sel.repeat = rep));
-    });
-  if (k === "b") return openBlockerPicker(sel);
-  if (k === "P") {
-    const opts = [
-      { value: "", label: "(no project)" },
-      ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
-      { value: "__new__", label: "＋ new project…" },
-    ];
-    const cur = opts.findIndex((o) => o.value === (sel.projects[0] || ""));
-    return openPicker("Set project", opts, cur < 0 ? 0 : cur, (v) => {
-      if (v === "__new__") return newProjectName((name) => mutate(() => (sel.projects = [name])));
-      mutate(() => (sel.projects = v ? [v] : []));
-    });
-  }
-  if (k === "e" || k === "Enter") {
-    state.editing = { id: sel.id, mode: "title" };
-    return render();
-  }
-  if (k === "E") {
-    state.editing = { id: sel.id, mode: "full" };
-    return render();
-  }
-  if (k === "n") return editNote(sel);
-  if (k === "l") return editLink(sel);
-  if (k === "J") {
-    e.preventDefault();
-    return mutate(() => reorder(sel, 1));
-  }
-  if (k === "K") {
-    e.preventDefault();
-    return mutate(() => reorder(sel, -1));
-  }
-  if (k === "Tab") {
-    e.preventDefault();
-    return mutate(() => indentItem(sel, e.shiftKey ? -1 : 1));
-  }
-  if (k === "#" || k === "Delete") {
-    e.preventDefault();
-    return mutate(() => deleteItem(sel));
+    act.run({ sel, e });
   }
 });
 

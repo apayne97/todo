@@ -165,26 +165,33 @@ option).
 
 ## Keyboard map
 
-**Navigate:** `j`/`k` move · `g g`/`G` top/bottom · `1`–`8` jump to view ·
-`/` search · `p` project filter (list picker)
+Most keys are **rebindable** — the Shortcuts view (`8`) has an inline editor
+(click a key to drop it, `＋` to add one, "Reset all to defaults"). Overrides are
+stored per-browser in `localStorage`. `ACTIONS` is the registry (name → label +
+`run`); `DEFAULT_BINDINGS` is action → keys. The keydown handler dispatches via a
+key→action lookup. The `?` overlay and Shortcuts view both render from the live
+bindings.
+
+Defaults:
+
+**Navigate:** `j`/`k` move · `G` bottom · `/` search · `p` project filter ·
+`\` clear filters · `?` help overlay
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
-`w` → next Monday (`bumps++`) · `s` set sched · `d` set due · `r` set repeat ·
-`b` set blocker (`needs:`) · `P` set project (or make a new one) ·
-`Tab`/`Shift-Tab` indent/outdent as subtask ·
-`e`/`Enter` edit title · `E` edit the whole line · `n` edit the note ·
-`l` edit the link · `J`/`K` reorder · `#` delete · `u` undo
+`w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat · `b` blockers ·
+`P` set project · `e`/`Enter` edit title · `E` edit whole line · `n` note ·
+`l` link · `J`/`K` reorder · `#` delete · `u` undo
 
-**Projects view:** `e`/`Enter` edit description · `n` edit info · `l` edit link ·
-`C` edit color · `a` new project
+**Create:** `a` add here (prefills `sched:today` in Today/Week) · `A` Inbox ·
+`c` quick-capture
 
-**Create:** `a` add in current context (prefills e.g. `sched:today` in Today) ·
-`A` add to Inbox · `c` quick-capture (global)
+**Not rebindable:** `1`–`8` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
+`Esc` (graduated back-out: clear filters → deselect → close) · Projects view
+`e`/`n`/`l`/`C`/`a`
 
-**Global:** `?` shortcuts overlay · `.` command palette · `Esc` close/deselect
-
-All bindings live in one config object shared by the handler, the `?` overlay,
-and the Shortcuts view.
+**Pickers:** the project-filter picker is numbered — `p` then a digit jumps
+straight to that project (`1` = All projects = clear filter). Filterable pickers
+(blockers) take type-to-filter instead.
 
 ## Undo
 

@@ -84,10 +84,14 @@ Edit them on the Projects view (`7`).
 
 ## Keys
 
-Press `?` in the app for the full list, or open the Shortcuts view (`8`).
-Highlights: `j`/`k` move, `x` done, `T` today, `t` tomorrow, `w` bump to next
-Monday, `s`/`d` set dates, `e` edit title, `E` edit the whole line, `n` note,
-`l` link, `P` set project, `p` project filter, `a` add, `c` quick-capture, `u` undo.
+Press `?` in the app for the full list. Highlights: `j`/`k` move, `x` done,
+`T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `e` edit title,
+`E` whole line, `n` note, `l` link, `b` blockers, `P` set project, `p` filter
+by project (numbered — `p` then a digit), `\` clear filters, `a` add,
+`c` quick-capture, `u` undo.
+
+Most keys are **rebindable** on the Shortcuts view (`8`) — click a key to remove
+it, `＋` to add one, "Reset all to defaults". Saved per-browser.
 
 ## Tests
 
