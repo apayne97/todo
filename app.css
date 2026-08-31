@@ -367,6 +367,11 @@ a.chip.link:hover {
   border-color: var(--accent);
 }
 
+.controls .chint {
+  color: var(--dim);
+  font-size: 11px;
+}
+
 .graph {
   width: calc(100% - 32px);
   margin: 8px 16px;

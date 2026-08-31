@@ -95,8 +95,10 @@ link: https://notion.so/grant-board
 status: drafting
 ```
 
-Edit them on the Projects view (`8`). `↵` / `o` on a card opens a full editable
-task list for that project (buckets by date, "show done" toggle).
+Manage them on the Projects view (`8`): **click a project** (or `↵`) to open a
+full editable task list for it — buckets by date, "show done" toggle. Inside,
+`⌃1`–`⌃9` swaps to another project and `\` goes back to the card list. To just
+highlight a card for `e`/`r`/`n`/`l`/`C`, use `j`/`k`.
 
 ## Keys
 
@@ -107,9 +109,9 @@ Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `S` push dates to subtasks,
 `]`/`[` ±1 day · `}`/`{` ±1 week · `)`/`(` ±1 month, `e` edit title, `E` whole line,
 `n` note, `l` link, `.`/`b` dependency overlay, `p` set project,
-`⌃1`–`⌃9` filter to project N (numbered in the sidebar) or `P` for the picker,
-`\` clear filters, `a` add, `c` quick-capture,
-`F` follow-up task (blocked on this, +3d), `u` undo.
+`⌃1`–`⌃9` Nth project — swaps the drill-in, or toggles the list filter (numbered
+in the sidebar); `P` for the picker, `\` clear filters / leave drill-in,
+`a` add, `c` quick-capture, `F` follow-up task (blocked on this, +3d), `u` undo.
 
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
 it, `＋` to add one, "Reset all to defaults". Overrides are saved on the server

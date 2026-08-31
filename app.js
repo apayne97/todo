@@ -25,8 +25,9 @@ const ACTIONS = {
   filterProject: { group: "Navigate", label: "filter by project", run: () => openProjectFilter() },
   clearFilters: {
     group: "Navigate",
-    label: "clear search + project filter",
+    label: "leave project view / clear search + filter",
     run: () => {
+      if (state.projectView) return exitProjectDetail();
       if (!state.search && !state.projectFilter) return;
       state.search = "";
       state.projectFilter = null;
@@ -85,12 +86,12 @@ const DEFAULT_BINDINGS = {
 // not rebindable — shown for reference on the Shortcuts page
 const FIXED_KEYS = [
   ["1–9", "switch view"],
-  ["⌃1–⌃9", "toggle filter to that project (see the sidebar numbers)"],
+  ["⌃1–⌃9", "Nth project — switch the drill-in, or toggle the list filter"],
   ["g g", "jump to top"],
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
-  ["Esc", "leave project view / clear filters / deselect"],
-  ["Projects: ↵ or o", "open — all of that project's tasks, editable"],
-  ["Projects: e n l C r a", "description · info · link · color · rename · new project"],
+  ["Esc / \\", "leave project drill-in → clear filters → deselect"],
+  ["Projects: click / ↵ / o", "open — all of that project's tasks, editable"],
+  ["Projects: j/k then e n l C r", "description · info · link · color · rename"],
 ];
 
 const state = {
@@ -1034,7 +1035,7 @@ function renderProjects(main) {
   const hint = document.createElement("div");
   hint.className = "dayhead";
   hint.textContent =
-    "↵ / o open · e description · r rename · n info · l link · C color · a new · click name to filter";
+    "click a project (or ↵) to open its tasks · j/k then e description · r rename · n info · l link · C color · a new";
   main.append(hint);
 
   if (!rows.length) {
@@ -1048,11 +1049,7 @@ function renderProjects(main) {
   for (const p of rows) {
     const card = document.createElement("div");
     card.className = "pcard" + (p.name === state.selectedId ? " sel" : "");
-    card.onclick = () => {
-      state.selectedId = p.name;
-      render();
-    };
-    card.ondblclick = () => openProjectDetail(p.name);
+    card.onclick = () => openProjectDetail(p.name);
 
     const head = document.createElement("div");
     head.className = "phead";
@@ -1063,11 +1060,8 @@ function renderProjects(main) {
     const name = document.createElement("button");
     name.className = "pname";
     name.textContent = p.name;
-    name.title = "filter todos by this project";
-    name.onclick = (e) => {
-      e.stopPropagation();
-      setProjectFilter(p.name);
-    };
+    name.title = "open this project";
+    name.onclick = () => openProjectDetail(p.name);
     head.append(name);
     const counts = document.createElement("span");
     counts.className = "pcounts";
@@ -1137,6 +1131,20 @@ function exitProjectDetail() {
   render();
 }
 
+// One gesture, two meanings: while drilled into a project it swaps which project
+// you're looking at (same view); everywhere else it toggles the list filter.
+function goToProject(name) {
+  if (state.projectView) {
+    if (name && name !== state.projectView) {
+      state.projectView = name;
+      state.selectedId = null;
+      render();
+    }
+    return;
+  }
+  setProjectFilter(state.projectFilter === name ? null : name);
+}
+
 // Every task tagged with the project, whatever its date/status — buckets mirror
 // the nav (overdue / today / tomorrow / upcoming / no date) plus optional done.
 // Rows are normal rows: all the usual keys edit them in place.
@@ -1149,9 +1157,14 @@ function renderProjectDetail(main) {
   const controls = document.createElement("div");
   controls.className = "controls";
   const back = document.createElement("button");
-  back.textContent = "← projects";
+  back.textContent = "\\ all projects";
+  back.title = "back to the project list";
   back.onclick = exitProjectDetail;
   controls.append(back);
+  const hint = document.createElement("span");
+  hint.className = "chint";
+  hint.textContent = "⌃1–⌃9 switch project";
+  controls.append(hint);
   const spacer = document.createElement("span");
   spacer.style.flex = "1";
   controls.append(spacer);
@@ -1436,10 +1449,11 @@ function render() {
     ph.textContent = "projects";
     side.append(ph);
     const all = document.createElement("button");
-    all.className = "navbtn tiny" + (!state.projectFilter ? " on" : "");
+    all.className = "navbtn tiny" + (!state.projectFilter && !state.projectView ? " on" : "");
     all.innerHTML = `<span class="nk">\\</span> all`;
-    all.title = "clear project filter (\\)";
+    all.title = state.projectView ? "back to all projects (\\)" : "clear project filter (\\)";
     all.onclick = () => {
+      if (state.projectView) return exitProjectDetail();
       state.projectFilter = null;
       render();
     };
@@ -1447,11 +1461,12 @@ function render() {
     // numbered 1–9 to match ⌃1–⌃9 (and the P picker)
     projs.forEach((p, i) => {
       const b = document.createElement("button");
-      b.className = "navbtn tiny" + (state.projectFilter === p ? " on" : "");
+      const active = state.projectView ? state.projectView === p : state.projectFilter === p;
+      b.className = "navbtn tiny" + (active ? " on" : "");
       const nk = i < 9 ? `⌃${i + 1}` : "";
       b.innerHTML = `<span class="nk">${nk}</span><span class="dot" style="background:${projColor(p)}"></span><span class="plabel">${p}</span>`;
-      if (i < 9) b.title = `filter by ${p}  (⌃${i + 1})`;
-      b.onclick = () => setProjectFilter(state.projectFilter === p ? null : p);
+      if (i < 9) b.title = `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})`;
+      b.onclick = () => goToProject(p);
       side.append(b);
     });
   }
@@ -2323,11 +2338,12 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  // ⌃1–⌃9 → toggle the project filter to the Nth project (matches the sidebar)
+  // ⌃1–⌃9 → the Nth project: swap the drill-in if you're in one, else toggle the
+  // list filter (matches the sidebar numbers)
   if (e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(k)) {
     e.preventDefault();
     const p = allProjects()[Number(k) - 1];
-    if (p) setProjectFilter(state.projectFilter === p ? null : p);
+    if (p) goToProject(p);
     return;
   }
 

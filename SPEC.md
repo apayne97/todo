@@ -131,7 +131,7 @@ dependent task straight into title-edit without opening the overlay.
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
 | 6 | Blocked    | items waiting on a dependency, plus a "ready" and a "problems" section |
 | 7 | Recurring  | every not-done item with a `repeat:` token, whatever its date          |
-| 8 | Projects   | one card per project; `↵`/`o` opens a full editable task list for it   |
+| 8 | Projects   | one card per project; click / `↵` opens a full editable task list for it |
 | 9 | Shortcuts  | full keyboard reference                                               |
 
 The date ladder is Today → Tomorrow → Upcoming (no standalone "this week" —
@@ -190,24 +190,28 @@ on save. `color:` overrides the name-hashed default and applies everywhere the
 project's dot or chip shows; it accepts any CSS color (`#4da6e5`, `rebeccapurple`,
 `hsl(...)`).
 
-On the Projects view: `↵` / `o` **open** the highlighted project, `e` description
-(multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch picker +
-native color input), `a` new project, click the name to filter the list by it.
-**Rename** rewrites the `### heading`, every `+tag` on tasks, the active filter
-and the selection in one step; it refuses a name that already exists. Creating a
-new item while a project filter is active tags it with that project; `P` on any
-item sets its project (with a "new project" option).
+On the Projects view: **click a card** (or `↵` / `o` on the highlighted one) to
+**open** the project. `j`/`k` highlights a card without opening it, then `e`
+description (multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch
+picker + native color input) act on it; `a` = new project. Clicking the
+description text edits it. **Rename** rewrites the `### heading`, every `+tag` on
+tasks, the active filter and the selection in one step; it refuses a name that
+already exists. Creating a new item while a project filter is active tags it with
+that project; `P` on any item sets its project (with a "new project" option).
 
-**Project drill-in** (`↵`/`o` on a card, or double-click it): a full editable
-list of *every* task in that project — buckets **overdue / today / tomorrow /
-upcoming / no date**, and a "show done" toggle. Rows are normal rows: every key
-edits them in place. `a` adds a task already tagged with the project. `Esc` /
-"← projects" returns to the cards. It's a sub-mode of the Projects view
-(`state.projectView`), not a numbered view.
+**Project drill-in** (`state.projectView`, a sub-mode of the Projects view — not
+a numbered view): a full editable list of *every* task in that project — buckets
+**overdue / today / tomorrow / upcoming / no date**, and a "show done" toggle.
+Rows are normal rows: every key edits them in place. `a` adds a task already
+tagged with the project. While you're in it:
 
-**Filtering by project** is one keystroke: `⌃1`–`⌃9` toggles the filter to the
-Nth project (the sidebar shows the number next to each; `\` = clear = the "all"
-row). `P` still opens the numbered picker for the same list.
+- `⌃1`–`⌃9` (or a sidebar project) **swaps** which project you're viewing, same layout
+- `\` (or `Esc`, or "\ all projects") returns to the card list
+
+**Filtering by project** (from any *non*-drill-in view): `⌃1`–`⌃9` toggles the
+list filter to the Nth project — the sidebar shows the number next to each, `\`
+clears. `P` opens the same list as a numbered picker. So `⌃N` means "the Nth
+project" everywhere; context decides whether that's a drill-in swap or a filter.
 
 ## Done view + graph
 
@@ -237,7 +241,8 @@ from the live bindings.
 Defaults:
 
 **Navigate:** `j` up · `k` down · `G` bottom · `/` search · `P` project-filter
-picker · `⌃1`–`⌃9` filter to project N · `\` clear filters · `?` help overlay
+picker · `⌃1`–`⌃9` Nth project (swap drill-in / toggle filter) · `\` leave
+drill-in / clear filters · `?` help overlay
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
 `w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat ·
@@ -263,9 +268,9 @@ it surfaces only once you've actually reached out. `F` doesn't open it for
 editing; after a brief beat the selection snaps back to the original task so you
 can `x` it right away.
 
-**Not rebindable:** `1`–`9` switch view · `⌃1`–`⌃9` filter to project N · `g g`
-top · `Tab`/`Shift-Tab` indent · `Esc` (leave project drill-in → clear filters →
-deselect) · Projects view `↵`/`o`/`e`/`n`/`l`/`C`/`r`/`a`
+**Not rebindable:** `1`–`9` switch view · `⌃1`–`⌃9` Nth project · `g g` top ·
+`Tab`/`Shift-Tab` indent · `Esc` and `\` (leave drill-in → clear filters →
+deselect) · Projects view `↵`/`o`/click open, `j`/`k` then `e`/`n`/`l`/`C`/`r`/`a`
 
 **Pickers:** the project-filter (`P`) and set-project (`p`) pickers are numbered —
 the letter then a digit jumps straight to that entry (filter: `1` = first
