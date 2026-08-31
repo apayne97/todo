@@ -136,12 +136,23 @@ header h1 {
 /* rows */
 .row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 5px 16px 5px 10px;
   border-bottom: 1px solid transparent;
   cursor: default;
+}
+
+/* title + chips + note — wraps as a block to the right of the checkbox, which
+   stays pinned top-left */
+.rowbody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
+  padding-top: 1px;
 }
 
 .row:hover {
@@ -185,6 +196,8 @@ header h1 {
 
 .title {
   flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .edit {
@@ -201,6 +214,8 @@ header h1 {
   flex-basis: 100%;
   color: var(--dim);
   font-size: 13px;
+  margin-top: 2px;
+  cursor: pointer;
 }
 
 /* chips */

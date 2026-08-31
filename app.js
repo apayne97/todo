@@ -594,33 +594,39 @@ function rowEl(it) {
     return row;
   }
 
+  // title + chips + note live in a body column so a long title wraps under
+  // itself and the checkbox stays put at the top-left
+  const body = document.createElement("div");
+  body.className = "rowbody";
+  row.append(body);
+
   const title = document.createElement("span");
   title.className = "title";
   title.textContent = it.title || "(untitled)";
-  row.append(title);
+  body.append(title);
 
   for (const p of it.projects) {
     const c = chip("+" + p, "proj");
     c.style.borderColor = projColor(p);
-    row.append(c);
+    body.append(c);
   }
-  if (it.pri) row.append(chip(it.pri, "pri pri-" + it.pri));
-  if (it.due) row.append(chip("due " + relDay(it.due), "due" + (P.daysBetween(it.due, todayISO()) <= 1 ? " hot" : "")));
+  if (it.pri) body.append(chip(it.pri, "pri pri-" + it.pri));
+  if (it.due) body.append(chip("due " + relDay(it.due), "due" + (P.daysBetween(it.due, todayISO()) <= 1 ? " hot" : "")));
   // In Today, an exact-today schedule is redundant; an overdue one still shows
   // ("3d over") so you can see how far a task has slipped.
   if (it.sched && !(state.view === "today" && it.sched === todayISO()))
-    row.append(chip(relDay(it.sched), "sched"));
-  if (it.repeat) row.append(chip("↻ " + it.repeat.kind + it.repeat.n + it.repeat.u, "rep"));
+    body.append(chip(relDay(it.sched), "sched"));
+  if (it.repeat) body.append(chip("↻ " + it.repeat.kind + it.repeat.n + it.repeat.u, "rep"));
   if ((it.bumps || 0) > 0) {
     const heat = it.bumps >= 5 ? " hot" : it.bumps >= 3 ? " warm" : "";
-    row.append(chip("⤴" + it.bumps, "bump" + heat, `bumped ${it.bumps}×`));
+    body.append(chip("⤴" + it.bumps, "bump" + heat, `bumped ${it.bumps}×`));
   }
   if (it.isBlocked && !it._cycle) {
     const names = it._blockedBy.map((b) => b.title);
-    row.append(chip("🔒", "lock", "blocked by: " + names.join(", ")));
+    body.append(chip("🔒", "lock", "blocked by: " + names.join(", ")));
   }
-  if (it._cycle) row.append(chip("⚠ cycle", "bad", "this item is in a dependency cycle"));
-  if (it._dangling.length) row.append(chip("⚠ broken dep", "bad", "needs: " + it._dangling.join(", ") + " — no such task"));
+  if (it._cycle) body.append(chip("⚠ cycle", "bad", "this item is in a dependency cycle"));
+  if (it._dangling.length) body.append(chip("⚠ broken dep", "bad", "needs: " + it._dangling.join(", ") + " — no such task"));
   const waiting = (it._blocking || []).filter((b) => !b.done).length;
   if (waiting) {
     const c = chip("⛓ " + waiting, "deps", `${waiting} task${waiting > 1 ? "s" : ""} depend on this — press . for the tree`);
@@ -631,21 +637,20 @@ function rowEl(it) {
       state.deps = it.id;
       render();
     };
-    row.append(c);
+    body.append(c);
   }
-  if (it.link) row.append(linkChip(it.link));
+  if (it.link) body.append(linkChip(it.link));
   const noteText = getNote(it);
   if (noteText) {
     const note = document.createElement("div");
     note.className = "note";
     note.textContent = noteText;
-    note.style.paddingLeft = 10 + it.depth * 22 + 26 + "px";
     note.onclick = (e) => {
       e.stopPropagation();
       selectItem(it.id);
       editNote(it);
     };
-    row.append(note);
+    body.append(note);
   }
   return row;
 }
@@ -896,20 +901,23 @@ function renderDone(main) {
         mutate(() => P.toggleDone(state.model, it.id, todayISO()));
       };
       row.append(b);
+      const rbody = document.createElement("div");
+      rbody.className = "rowbody";
+      row.append(rbody);
       const t = document.createElement("span");
       t.className = "title";
       t.textContent = it.title;
-      row.append(t);
+      rbody.append(t);
       for (const p of it.projects) {
         const c = chip("+" + p, "proj");
         c.style.borderColor = projColor(p);
-        row.append(c);
+        rbody.append(c);
       }
-      if (it.repeat) row.append(chip("↻", "rep"));
-      if ((it.bumps || 0) > 0) row.append(chip("finished despite ⤴" + it.bumps, "bump"));
+      if (it.repeat) rbody.append(chip("↻", "rep"));
+      if ((it.bumps || 0) > 0) rbody.append(chip("finished despite ⤴" + it.bumps, "bump"));
       if (it.created) {
         const age = P.daysBetween(it.doneDate, it.created);
-        if (age >= 7) row.append(chip(age + "d to finish", "age"));
+        if (age >= 7) rbody.append(chip(age + "d to finish", "age"));
       }
       main.append(row);
     }
@@ -1441,7 +1449,7 @@ function render() {
       const b = document.createElement("button");
       b.className = "navbtn tiny" + (state.projectFilter === p ? " on" : "");
       const nk = i < 9 ? `⌃${i + 1}` : "";
-      b.innerHTML = `<span class="nk">${nk}</span><span class="dot" style="background:${projColor(p)}"></span>${p}`;
+      b.innerHTML = `<span class="nk">${nk}</span><span class="dot" style="background:${projColor(p)}"></span><span class="plabel">${p}</span>`;
       if (i < 9) b.title = `filter by ${p}  (⌃${i + 1})`;
       b.onclick = () => setProjectFilter(state.projectFilter === p ? null : p);
       side.append(b);
