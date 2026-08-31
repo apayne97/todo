@@ -124,18 +124,22 @@ dependent task straight into title-edit without opening the overlay.
 
 | # | View       | Contents                                                              |
 |---|------------|----------------------------------------------------------------------|
-| 1 | Today      | not done & (`sched ≤ today` or `due ≤ today`), minus blocked — overdue items in a section at the top |
-| 2 | This Week  | `sched` or `due` on or before Sunday                                  |
-| 3 | Upcoming   | dated beyond this week                                                |
+| 1 | Today      | not done & first date (`sched`/`due`) is today or past, minus blocked — overdue in a section at the top |
+| 2 | Tomorrow   | not done & first date is exactly tomorrow, minus blocked              |
+| 3 | Upcoming   | first date is after tomorrow — split into **rest of this week / next week / later** |
 | 4 | Inbox      | no `sched`, no `due`                                                  |
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
 | 6 | Blocked    | items waiting on a dependency, plus a "ready" and a "problems" section |
 | 7 | Recurring  | every not-done item with a `repeat:` token, whatever its date          |
-| 8 | Projects   | one card per project: description, info, live task counts             |
+| 8 | Projects   | one card per project; `↵`/`o` opens a full editable task list for it   |
 | 9 | Shortcuts  | full keyboard reference                                               |
 
-Project filter (`P`) and text search (`/`) layer on top of any view.
-Dates render relative: "Mon", "in 3d", "2d overdue" (red).
+The date ladder is Today → Tomorrow → Upcoming (no standalone "this week" —
+it's the first section of Upcoming). "First date" = the earlier of `sched`/`due`.
+
+Project filter (`P`, or `⌃1`–`⌃9` for the sidebar-numbered projects) and text
+search (`/`) layer on top of any view. Dates render relative: "Mon", "in 3d",
+"2d overdue" (red).
 
 **Effective dates.** Views filter on an item's *effective* `sched`/`due`, which
 for a subtask is floored by its parent's — a checklist item can't be actioned
@@ -152,7 +156,7 @@ but kept when overdue, so "3d over" still shows how far a task has slipped.
 **Blocked** groups not-done items into:
 - **ready — blockers cleared** — a `needs:` list that's now fully satisfied *and
   has no `sched`/`due`*. "This was gated, now give it a date." A dated one is
-  skipped here because Today / This Week / Upcoming already carry it.
+  skipped here because Today / Tomorrow / Upcoming already carry it.
 - **blocked** — an unfinished `needs:` task in the way. Shown with 🔒 and the
   blocker's title.
 - **problems** — `needs:` points at a task that no longer exists, or a dependency
@@ -186,13 +190,24 @@ on save. `color:` overrides the name-hashed default and applies everywhere the
 project's dot or chip shows; it accepts any CSS color (`#4da6e5`, `rebeccapurple`,
 `hsl(...)`).
 
-On the Projects view: `e` description (multi-line), `r` rename, `n` info lines,
-`l` link, `C` color (swatch picker + native color input), `a` new project, click
-the name to filter the list by it. **Rename** rewrites the `### heading`, every
-`+tag` on tasks, the active filter and the selection in one step; it refuses a
-name that already exists. Creating a new item while a project filter is active
-tags it with that project; `P` on any item sets its project (with a "new project"
-option).
+On the Projects view: `↵` / `o` **open** the highlighted project, `e` description
+(multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch picker +
+native color input), `a` new project, click the name to filter the list by it.
+**Rename** rewrites the `### heading`, every `+tag` on tasks, the active filter
+and the selection in one step; it refuses a name that already exists. Creating a
+new item while a project filter is active tags it with that project; `P` on any
+item sets its project (with a "new project" option).
+
+**Project drill-in** (`↵`/`o` on a card, or double-click it): a full editable
+list of *every* task in that project — buckets **overdue / today / tomorrow /
+upcoming / no date**, and a "show done" toggle. Rows are normal rows: every key
+edits them in place. `a` adds a task already tagged with the project. `Esc` /
+"← projects" returns to the cards. It's a sub-mode of the Projects view
+(`state.projectView`), not a numbered view.
+
+**Filtering by project** is one keystroke: `⌃1`–`⌃9` toggles the filter to the
+Nth project (the sidebar shows the number next to each; `\` = clear = the "all"
+row). `P` still opens the numbered picker for the same list.
 
 ## Done view + graph
 
@@ -221,8 +236,8 @@ from the live bindings.
 
 Defaults:
 
-**Navigate:** `j` up · `k` down · `G` bottom · `/` search · `P` project filter ·
-`\` clear filters · `?` help overlay
+**Navigate:** `j` up · `k` down · `G` bottom · `/` search · `P` project-filter
+picker · `⌃1`–`⌃9` filter to project N · `\` clear filters · `?` help overlay
 
 **Selected item:** `x` toggle done · `T` → today · `t` → tomorrow ·
 `w` → next Monday (`bumps++`) · `s` sched · `d` due · `r` repeat ·
@@ -235,9 +250,12 @@ no `bumps++`): `]` / `[` ±1 day · `}` / `{` ±1 week · `)` / `(` ±1 month. T
 selection sticks to the task through repeat presses even after it leaves the view
 (watch the toast); a burst shares one undo step.
 
-**Create:** `a` add here — inline, after the selection, prefills `sched:today` in
-Today/Week (in Inbox it's dateless) · `c` quick-capture (modal, works from any
-view, parses `+project` / `due:…` as you type) · `B` new task that blocks the
+**Create:** `a` add here — inline, after the selection. Date context: Today →
+`sched:today`, Tomorrow → `sched:tomorrow`, **Upcoming → the date of the section
+you're in** (copied off the sibling you're next to; falls back to end of this
+week), project drill-in → tagged with the project, Inbox → dateless · `c`
+quick-capture (modal, works from any view, parses `+project` / `due:…` as you
+type) · `B` new task that blocks the
 selected one · `D` new task that depends on it · `F` follow-up: a dependent
 "follow up on <title>" task (leading "follow up on/with" stripped so chains don't
 stack), same project, `sched` +3 days — blocked until you've done the original, so
@@ -245,14 +263,14 @@ it surfaces only once you've actually reached out. `F` doesn't open it for
 editing; after a brief beat the selection snaps back to the original task so you
 can `x` it right away.
 
-**Not rebindable:** `1`–`9` switch view · `g g` top · `Tab`/`Shift-Tab` indent ·
-`Esc` (graduated back-out: clear filters → deselect → close) · Projects view
-`e`/`n`/`l`/`C`/`r`/`a`
+**Not rebindable:** `1`–`9` switch view · `⌃1`–`⌃9` filter to project N · `g g`
+top · `Tab`/`Shift-Tab` indent · `Esc` (leave project drill-in → clear filters →
+deselect) · Projects view `↵`/`o`/`e`/`n`/`l`/`C`/`r`/`a`
 
 **Pickers:** the project-filter (`P`) and set-project (`p`) pickers are numbered —
-the letter then a digit jumps straight to that entry (`1` in the filter = All
-projects = clear filter; `1` in set-project = no project). The nav keys move the
-highlight. Filterable pickers (blockers) take type-to-filter instead.
+the letter then a digit jumps straight to that entry (filter: `1` = first
+project, "All (clear)" is last; set-project: `1` = no project). The nav keys move
+the highlight. Filterable pickers (blockers) take type-to-filter instead.
 
 ## Ordering & reorder
 

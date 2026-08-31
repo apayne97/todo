@@ -6,10 +6,12 @@
 // Env:
 //   TODO_PORT           override port (default 4444)
 //   TODO_FILE           path to the markdown ground truth (default ./todos.md)
-//   TODO_AUTOCOMMIT=1   git-commit todos.md ~8s after the last edit (a burst of
+//   TODO_AUTOCOMMIT     git-commit todos.md ~8s after the last edit (a burst of
 //                       edits becomes one "todo: autosave <date> <time>" commit).
-//   TODO_AUTOPUSH=1     also push after committing (implies TODO_AUTOCOMMIT);
-//                       rebases onto any concurrent push before retrying.
+//                       ON by default; set TODO_AUTOCOMMIT=0 to disable.
+//   TODO_AUTOPUSH       also push after committing, rebasing onto any concurrent
+//                       push first. ON by default; set TODO_AUTOPUSH=0 to keep
+//                       commits local. (Disabling autocommit disables push too.)
 //
 // API:
 //   GET  /todos   -> { text, etag }        etag is the file mtime
@@ -34,8 +36,10 @@ const PORT = Number(argVal("--port") || process.env.TODO_PORT || 4444);
 const FILE = resolve(HERE, argVal("--file") || process.env.TODO_FILE || "todos.md");
 // UI prefs (currently just key bindings). Local to this machine, not committed.
 const CONFIG = resolve(HERE, "todo.config.json");
-const AUTOPUSH = process.env.TODO_AUTOPUSH === "1";
-const AUTOCOMMIT = AUTOPUSH || process.env.TODO_AUTOCOMMIT === "1";
+// both on by default — the point of this app is that todos.md is never stranded
+// on one machine. Opt out with TODO_AUTOCOMMIT=0 (all local) or TODO_AUTOPUSH=0.
+const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT !== "0";
+const AUTOPUSH = AUTOCOMMIT && process.env.TODO_AUTOPUSH !== "0";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -192,7 +196,7 @@ server.listen(PORT, () => {
   console.log(`ground truth ${FILE}`);
   console.log(
     `autocommit ${
-      AUTOPUSH ? "on + push" : AUTOCOMMIT ? "on (local; set TODO_AUTOPUSH=1 to push)" : "off (set TODO_AUTOCOMMIT=1)"
+      AUTOPUSH ? "on + push" : AUTOCOMMIT ? "on (local; TODO_AUTOPUSH=0 set)" : "off (TODO_AUTOCOMMIT=0 set)"
     }`
   );
 });

@@ -80,8 +80,14 @@ body {
 }
 
 .navbtn.tiny {
-  padding: 4px 8px 4px 26px;
+  padding: 4px 8px;
   font-size: 13px;
+}
+
+.navbtn.tiny .nk {
+  width: 22px;
+  flex: none;
+  text-align: left;
 }
 
 .dot {

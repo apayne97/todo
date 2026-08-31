@@ -4,7 +4,7 @@ const API = "/todos";
 
 const VIEWS = [
   ["today", "Today"],
-  ["week", "This Week"],
+  ["tomorrow", "Tomorrow"],
   ["upcoming", "Upcoming"],
   ["inbox", "Inbox"],
   ["done", "Done"],
@@ -85,10 +85,12 @@ const DEFAULT_BINDINGS = {
 // not rebindable — shown for reference on the Shortcuts page
 const FIXED_KEYS = [
   ["1–9", "switch view"],
+  ["⌃1–⌃9", "toggle filter to that project (see the sidebar numbers)"],
   ["g g", "jump to top"],
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
-  ["Esc", "clear filters, then deselect, then close"],
-  ["Projects view: e n l C r a", "description · info · link · color · rename · new project"],
+  ["Esc", "leave project view / clear filters / deselect"],
+  ["Projects: ↵ or o", "open — all of that project's tasks, editable"],
+  ["Projects: e n l C r a", "description · info · link · color · rename · new project"],
 ];
 
 const state = {
@@ -110,6 +112,8 @@ const state = {
   capturingKey: null, // action name being rebound on the Shortcuts page
   deps: null, // id of the item whose dependency tree is on screen
   _depsTrail: [], // walk history for the deps overlay
+  projectView: null, // project name — drilled-in "all tasks for this project" list
+  projectShowDone: false, // include completed tasks in the project drill-in
   toastMsg: null,
   _flat: [],
   _focusEl: null,
@@ -117,6 +121,7 @@ const state = {
 };
 
 const todayISO = () => P.iso(new Date());
+const tomorrowISO = () => P.iso(P.addDays(new Date(), 1));
 const $ = (sel, el = document) => el.querySelector(sel);
 
 // ---------- key bindings ----------
@@ -475,17 +480,21 @@ function viewMatch(it, view, t, we) {
   if (view === "done") return it.done;
   if (it.done) return false;
   // effective dates (see computeStatus): a subtask inherits its parent's start,
-  // so it isn't pulled into Today/This Week ahead of the task it belongs to
+  // so it isn't pulled into an earlier view ahead of the task it belongs to
   const s = it._effSched ?? it.sched;
   const d = it._effDue ?? it.due;
-  if (view === "today") return !it.isBlocked && ((s && s <= t) || (d && d <= t));
-  if (view === "week") return !it.isBlocked && ((s && s <= we) || (d && d <= we));
-  if (view === "upcoming") return (s && s > we) || (!s && d && d > we);
+  const fd = [s, d].filter(Boolean).sort()[0] || null; // first date that matters
+  const tom = tomorrowISO();
+  // date ladder: Today (due/overdue) → Tomorrow → Upcoming (everything later,
+  // split into sections by renderList). No standalone "this week" view anymore.
+  if (view === "today") return !it.isBlocked && !!fd && fd <= t;
+  if (view === "tomorrow") return !it.isBlocked && fd === tom;
+  if (view === "upcoming") return !!fd && fd > tom;
   if (view === "inbox") return !s && !d && !it.isBlocked;
   if (view === "blocked") {
     if (it.isBlocked || it._dangling.length > 0) return true;
     // "ready" = a just-unblocked item. Only surface undated ones here; a dated
-    // one already shows in Today / This Week / Upcoming, so listing it again
+    // one already shows in Today / Tomorrow / Upcoming, so listing it again
     // would just be a duplicate.
     return isReady(it) && !s && !d;
   }
@@ -766,6 +775,23 @@ function renderList(main) {
     }
     return;
   }
+  // Upcoming: split into rest-of-this-week / next-week / later
+  if (state.view === "upcoming") {
+    const we = P.weekEndISO(todayISO());
+    const nextWe = P.iso(P.addDays(P.parseISO(we), 7));
+    const labels = ["rest of this week", "next week", "later"];
+    const bucket = (r) => {
+      const k = sortKey(r);
+      return k <= we ? 0 : k <= nextWe ? 1 : 2;
+    };
+    for (let b = 0; b < 3; b++) {
+      const g = roots.filter((r) => bucket(r) === b);
+      if (!g.length) continue;
+      main.append(sectionHeadEl(`${labels[b]} · ${g.length}`));
+      walkRows(g, main);
+    }
+    return;
+  }
   walkRows(roots, main);
 }
 
@@ -999,7 +1025,8 @@ function renderProjects(main) {
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
-  hint.textContent = "e description · r rename · n info · l link · C color · a new project · click name to filter";
+  hint.textContent =
+    "↵ / o open · e description · r rename · n info · l link · C color · a new · click name to filter";
   main.append(hint);
 
   if (!rows.length) {
@@ -1017,6 +1044,7 @@ function renderProjects(main) {
       state.selectedId = p.name;
       render();
     };
+    card.ondblclick = () => openProjectDetail(p.name);
 
     const head = document.createElement("div");
     head.className = "phead";
@@ -1030,10 +1058,7 @@ function renderProjects(main) {
     name.title = "filter todos by this project";
     name.onclick = (e) => {
       e.stopPropagation();
-      state.projectFilter = p.name;
-      state.view = "today";
-      state.selectedId = null;
-      render();
+      setProjectFilter(p.name);
     };
     head.append(name);
     const counts = document.createElement("span");
@@ -1086,6 +1111,83 @@ function editProjectDesc(name) {
       ensureProjectEntry(name).desc = v.trim();
     })
   );
+}
+
+// ---------- project drill-in (all tasks for one project, editable) ----------
+
+function openProjectDetail(name) {
+  state.projectView = name;
+  state.selectedId = null;
+  render();
+}
+
+function exitProjectDetail() {
+  const name = state.projectView;
+  state.projectView = null;
+  state.view = "projects";
+  state.selectedId = name; // land back on the card you came from
+  render();
+}
+
+// Every task tagged with the project, whatever its date/status — buckets mirror
+// the nav (overdue / today / tomorrow / upcoming / no date) plus optional done.
+// Rows are normal rows: all the usual keys edit them in place.
+function renderProjectDetail(main) {
+  const name = state.projectView;
+  const t = todayISO();
+  const tom = tomorrowISO();
+  state._flat = [];
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+  const back = document.createElement("button");
+  back.textContent = "← projects";
+  back.onclick = exitProjectDetail;
+  controls.append(back);
+  const spacer = document.createElement("span");
+  spacer.style.flex = "1";
+  controls.append(spacer);
+  const dt = document.createElement("button");
+  dt.textContent = state.projectShowDone ? "hide done" : "show done";
+  dt.className = state.projectShowDone ? "on" : "";
+  dt.onclick = () => {
+    state.projectShowDone = !state.projectShowDone;
+    render();
+  };
+  controls.append(dt);
+  main.append(controls);
+
+  const roots = P.buildTrees(state.model.items)
+    .filter((r) => anyDesc(r, (x) => x.projects.includes(name)))
+    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  const open = roots.filter((r) => anyDesc(r, (x) => !x.done));
+  const doneTrees = roots.filter((r) => !anyDesc(r, (x) => !x.done));
+
+  const buckets = [
+    ["overdue", (r) => anyDesc(r, isOverdue)],
+    ["today", (r) => !anyDesc(r, isOverdue) && sortKey(r) === t],
+    ["tomorrow", (r) => sortKey(r) === tom],
+    ["upcoming", (r) => sortKey(r) > tom && sortKey(r) !== "9999-99-99"],
+    ["no date", (r) => sortKey(r) === "9999-99-99"],
+  ];
+  let shown = 0;
+  for (const [label, pred] of buckets) {
+    const g = open.filter(pred);
+    if (!g.length) continue;
+    shown += g.length;
+    main.append(sectionHeadEl(`${label} · ${g.length}`));
+    walkRows(g, main);
+  }
+  if (!shown) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No open tasks in this project — press a to add one.";
+    main.append(e);
+  }
+  if (state.projectShowDone && doneTrees.length) {
+    main.append(sectionHeadEl(`done · ${doneTrees.length}`));
+    walkRows(doneTrees, main);
+  }
 }
 
 function editProjectMeta(name) {
@@ -1270,7 +1372,8 @@ function shortcutsEditorEl() {
 let RENDERING = false;
 
 function paintList(main) {
-  if (state.view === "shortcuts") main.append(shortcutsEditorEl());
+  if (state.projectView) renderProjectDetail(main);
+  else if (state.view === "shortcuts") main.append(shortcutsEditorEl());
   else if (state.view === "projects") renderProjects(main);
   else if (state.view === "done") renderDone(main);
   else if (state.view === "blocked") renderBlocked(main);
@@ -1311,6 +1414,7 @@ function render() {
     b.innerHTML = `<span class="nk">${i + 1}</span> ${label}<span class="nc">${count}</span>`;
     b.onclick = () => {
       state.view = k;
+      state.projectView = null;
       state.selectedId = null;
       render();
     };
@@ -1325,28 +1429,32 @@ function render() {
     side.append(ph);
     const all = document.createElement("button");
     all.className = "navbtn tiny" + (!state.projectFilter ? " on" : "");
-    all.textContent = "all";
+    all.innerHTML = `<span class="nk">\\</span> all`;
+    all.title = "clear project filter (\\)";
     all.onclick = () => {
       state.projectFilter = null;
       render();
     };
     side.append(all);
-    for (const p of projs) {
+    // numbered 1–9 to match ⌃1–⌃9 (and the P picker)
+    projs.forEach((p, i) => {
       const b = document.createElement("button");
       b.className = "navbtn tiny" + (state.projectFilter === p ? " on" : "");
-      b.innerHTML = `<span class="dot" style="background:${projColor(p)}"></span>${p}`;
-      b.onclick = () => {
-        state.projectFilter = state.projectFilter === p ? null : p;
-        render();
-      };
+      const nk = i < 9 ? `⌃${i + 1}` : "";
+      b.innerHTML = `<span class="nk">${nk}</span><span class="dot" style="background:${projColor(p)}"></span>${p}`;
+      if (i < 9) b.title = `filter by ${p}  (⌃${i + 1})`;
+      b.onclick = () => setProjectFilter(state.projectFilter === p ? null : p);
       side.append(b);
-    }
+    });
   }
   app.append(side);
 
   const mainWrap = document.createElement("main");
   const head = document.createElement("header");
-  head.innerHTML = `<h1>${VIEWS.find((v) => v[0] === state.view)[1]}</h1>`;
+  const headTitle = state.projectView
+    ? `+${state.projectView}`
+    : VIEWS.find((v) => v[0] === state.view)[1];
+  head.innerHTML = `<h1>${headTitle}</h1>`;
   if (state.search) {
     const s = chip('search: "' + state.search + '" ✕', "filter");
     s.onclick = () => {
@@ -1838,6 +1946,19 @@ function selectEdge(dir) {
   render();
 }
 
+// The schedule a freshly-added task should carry, from where you're standing:
+// Today → today, Tomorrow → tomorrow, Upcoming → the date of the section you're
+// in (read off the sibling you're next to; falls back to end of this week).
+function newItemSched(sel) {
+  if (state.view === "today") return todayISO();
+  if (state.view === "tomorrow") return tomorrowISO();
+  if (state.view === "upcoming") {
+    const k = sel && sortKey(sel);
+    return k && k !== "9999-99-99" ? k : P.weekEndISO(todayISO());
+  }
+  return null;
+}
+
 // Add a task inline: after the selected row (as a sibling), or at the top.
 // Picks up the current view's date context and the active project filter.
 function addItem() {
@@ -1852,8 +1973,10 @@ function addItem() {
       it.depth = sel.depth;
       items.splice(end, 0, it);
     } else items.unshift(it);
-    if (state.view === "today" || state.view === "week") it.sched = todayISO();
-    if (state.projectFilter) it.projects = [state.projectFilter];
+    const sched = newItemSched(sel);
+    if (sched) it.sched = sched;
+    if (state.projectView) it.projects = [state.projectView];
+    else if (state.projectFilter) it.projects = [state.projectFilter];
     P.ensureIds(items);
     state.selectedId = it.id;
     state.editing = { id: it.id, mode: "title" };
@@ -1872,7 +1995,8 @@ function createLinkedItem(sel, direction) {
     it.depth = sel.depth;
     const [i, end] = subtreeRange(sel);
     items.splice(direction === "blocking" ? i : end, 0, it);
-    if (state.view === "today" || state.view === "week") it.sched = todayISO();
+    if (state.view === "today") it.sched = todayISO();
+    else if (state.view === "tomorrow") it.sched = tomorrowISO();
     if (state.projectFilter) it.projects = [state.projectFilter];
     else if (sel.projects.length) it.projects = [sel.projects[0]];
     P.ensureIds(items);
@@ -1928,16 +2052,27 @@ function openSearch() {
   });
 }
 
+// Apply a project filter (null clears). Drops out of a project drill-in, and if
+// you're on the Projects cards — where a filter is invisible — jumps to Today.
+function setProjectFilter(name) {
+  state.projectFilter = name;
+  state.projectView = null;
+  if (name && state.view === "projects") state.view = "today";
+  state.selectedId = null;
+  render();
+}
+
 function openProjectFilter() {
+  // projects numbered 1..N to match ⌃1..⌃N and the sidebar; clear is last
+  const list = allProjects();
   const opts = [
-    { value: null, label: "All projects" },
-    ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
+    ...list.map((p) => ({ value: p, label: p, dot: projColor(p) })),
+    { value: null, label: "All projects (clear)" },
   ];
   const cur = opts.findIndex((o) => o.value === state.projectFilter);
-  openPicker("Filter by project", opts, cur < 0 ? 0 : cur, (v) => {
-    state.projectFilter = v;
-    render();
-  }, { numbered: true });
+  openPicker("Filter by project", opts, cur < 0 ? opts.length - 1 : cur, (v) => setProjectFilter(v), {
+    numbered: true,
+  });
 }
 
 function openCapture() {
@@ -2165,8 +2300,9 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  // Esc: graduated back-out — filters, then selection
+  // Esc: leave a project drill-in, then graduated back-out — filters, selection
   if (k === "Escape") {
+    if (state.projectView) return exitProjectDetail();
     if (state.search || state.projectFilter) {
       state.search = "";
       state.projectFilter = null;
@@ -2179,9 +2315,18 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  // ⌃1–⌃9 → toggle the project filter to the Nth project (matches the sidebar)
+  if (e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(k)) {
+    e.preventDefault();
+    const p = allProjects()[Number(k) - 1];
+    if (p) setProjectFilter(state.projectFilter === p ? null : p);
+    return;
+  }
+
   // view switching (not rebindable)
   if (/^[1-9]$/.test(k) && Number(k) <= VIEWS.length) {
     state.view = VIEWS[Number(k) - 1][0];
+    state.projectView = null;
     state.selectedId = null;
     return render();
   }
@@ -2207,7 +2352,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // Projects view: contextual keys (not rebindable)
-  if (state.view === "projects" && ["e", "Enter", "n", "l", "C", "r", "a"].includes(k)) {
+  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -2216,6 +2361,7 @@ document.addEventListener("keydown", (e) => {
         editProjectDesc(name);
       });
     if (!state.selectedId) return;
+    if (k === "Enter" || k === "o") return openProjectDetail(state.selectedId);
     if (k === "n") return editProjectMeta(state.selectedId);
     if (k === "l") return editProjectLink(state.selectedId);
     if (k === "C") return editProjectColor(state.selectedId);

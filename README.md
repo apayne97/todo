@@ -13,11 +13,12 @@ cd ~/life/todo && npm start
 Then open <http://localhost:4444>.
 
 **Always-on (and phone access):** [`deploy/com.apayne.todo.plist`](deploy/com.apayne.todo.plist)
-is a launchd agent that keeps the server running whenever you're logged in
-(`TODO_AUTOPUSH=1`). Install per the comment at the top of that file. With
-Tailscale, the phone reaches it at `http://<mac-name>:4444` from anywhere; add to
-the home screen for an app-like shell. The `pantheon` `preview_start todo` config
-just attaches to the running server.
+is a launchd agent that keeps the server running whenever you're logged in.
+Install per the comment at the top of that file. With Tailscale, the phone
+reaches it at `http://<mac-name>:4444` from anywhere; add to the home screen for
+an app-like shell. The `pantheon` `preview_start todo` config just attaches to
+the running server. **Run it on every machine you edit from** — otherwise edits
+made there sit unpushed (`cd ~/life/todo && git push` to recover them).
 
 **Open it as a real app (no more fishing through Chrome tabs):** the page ships a
 web manifest + icon, so it's installable as a standalone window.
@@ -31,18 +32,14 @@ web manifest + icon, so it's installable as a standalone window.
   focuses-or-opens the single window from anywhere.
 - **iPhone:** Safari → Share → *Add to Home Screen*.
 
-**Autosave to git:**
+**Autosave to git — on by default.** The server commits `todos.md` ~8s after the
+last edit and pushes. A burst of edits (checking off three things, adding two)
+becomes one `todo: autosave 2026-08-26 14:32` commit; filter them out with
+`git log --grep autosave --invert-grep`. It rebases onto any concurrent push
+first, so a code commit from another session is never clobbered.
 
-- `TODO_AUTOCOMMIT=1` — commit `todos.md` ~8s after the last edit. A burst of
-  edits (checking off three things, adding two) becomes one
-  `todo: autosave 2026-08-26 14:32` commit. Filter with
-  `git log --grep autosave --since "3 days ago"`.
-- `TODO_AUTOPUSH=1` — also push (implies autocommit). Rebases onto any concurrent
-  push first, so a code commit from another session is never clobbered.
-
-```bash
-TODO_AUTOPUSH=1 npm start
-```
+- `TODO_AUTOPUSH=0` — commit locally but don't push.
+- `TODO_AUTOCOMMIT=0` — don't touch git at all (implies no push).
 
 Storage isn't a concern — git delta-compresses these tiny diffs to almost nothing.
 
@@ -98,17 +95,21 @@ link: https://notion.so/grant-board
 status: drafting
 ```
 
-Edit them on the Projects view (`7`).
+Edit them on the Projects view (`8`). `↵` / `o` on a card opens a full editable
+task list for that project (buckets by date, "show done" toggle).
 
 ## Keys
+
+Views `1`–`9`: Today · Tomorrow · Upcoming (rest of week / next week / later) ·
+Inbox · Done · Blocked · Recurring · Projects · Shortcuts.
 
 Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `S` push dates to subtasks,
 `]`/`[` ±1 day · `}`/`{` ±1 week · `)`/`(` ±1 month, `e` edit title, `E` whole line,
 `n` note, `l` link, `.`/`b` dependency overlay, `p` set project,
-`P` filter by project, `\` clear filters, `a` add, `c` quick-capture,
+`⌃1`–`⌃9` filter to project N (numbered in the sidebar) or `P` for the picker,
+`\` clear filters, `a` add, `c` quick-capture,
 `F` follow-up task (blocked on this, +3d), `u` undo.
-Both project pickers are numbered — the letter then a digit jumps straight there.
 
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
 it, `＋` to add one, "Reset all to defaults". Overrides are saved on the server
