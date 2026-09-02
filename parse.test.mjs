@@ -137,6 +137,38 @@ test("round-trips a Projects section", () => {
   assert.equal(again.items.length, 1);
 });
 
+test("explicit project order round-trips and sorts the blocks", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [ ] x +home id:t1",
+    "- [ ] y +grant id:t2",
+    "- [ ] z +garden id:t3",
+    "",
+    "## Done",
+    "",
+    "## Projects",
+    "",
+    "order: home, grant",
+    "",
+    "### grant",
+    "the grant",
+    "",
+    "### home",
+    "the home",
+    "",
+  ].join("\n");
+  const model = P.parse(src);
+  assert.deepEqual(model.projectOrder, ["home", "grant"]);
+  const out = P.serialize(model);
+  // order line names every project, listed ones first, then the rest sorted
+  assert.match(out, /^order: home, grant, garden$/m);
+  // the ### blocks follow the order too (home before grant)
+  assert.ok(out.indexOf("### home") < out.indexOf("### grant"), "blocks reordered");
+  const again = P.parse(out);
+  assert.deepEqual(again.projectOrder, ["home", "grant", "garden"]);
+});
+
 test("empty project entries are pruned on serialize", () => {
   const model = P.parse("# Todos\n\n- [ ] x id:a1\n\n## Done\n");
   model.projects.push({ name: "ghost", desc: "", meta: [], link: "", color: "" });

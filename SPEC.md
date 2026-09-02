@@ -41,6 +41,9 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 
 ## Done
 <completed items appended here, `done:` dated; newest at the bottom>
+
+## Projects
+<optional `order:` line, then `### name` blocks — see the Projects section>
 ```
 
 Recurring instances keep their `repeat:` token when completed, which is how the
@@ -174,6 +177,8 @@ Project descriptions and info live in a `## Projects` section at the end of
 ```markdown
 ## Projects
 
+order: grant, home, garden
+
 ### grant
 NIH R01 renewal. First draft to OSP by March 1.
 color: #4da6e5
@@ -186,15 +191,22 @@ lead: me
 special `color:` / `link:` lines and `key: value` lines (structured info). A
 project exists as soon as a task is tagged `+name` — the `## Projects` entry only
 adds description / color / link / info, and entries with none of those are pruned
-on save. `color:` overrides the name-hashed default and applies everywhere the
+on save.
+
+An optional `order:` line (comma-separated names, right after `## Projects`) sets
+the project ordering — the sidebar, the `⌃1`–`⌃9` mapping, the `P` picker and the
+cards all follow it. It's written only once you reorder (`J`/`K` on the Projects
+view); the app then lists every project in it, named ones first, the rest
+alphabetically, and reorders the `### blocks` to match. Tag-only projects can be
+ordered too — they just need a name in the list, not a `### block`. `color:` overrides the name-hashed default and applies everywhere the
 project's dot or chip shows; it accepts any CSS color (`#4da6e5`, `rebeccapurple`,
 `hsl(...)`).
 
 On the Projects view: **click a card** (or `↵` / `o` on the highlighted one) to
-**open** the project. `j`/`k` highlights a card without opening it, then `e`
-description (multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch
-picker + native color input) act on it; `a` = new project. Clicking the
-description text edits it. **Rename** rewrites the `### heading`, every `+tag` on
+**open** the project. `j`/`k` highlights a card without opening it, then `J`/`K`
+reorder it (writes/updates the `order:` line and renumbers `⌃N`), `e` description
+(multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch picker +
+native color input); `a` = new project. Clicking the description text edits it. **Rename** rewrites the `### heading`, every `+tag` on
 tasks, the active filter and the selection in one step; it refuses a name that
 already exists. Creating a new item while a project filter is active tags it with
 that project; `P` on any item sets its project (with a "new project" option).
@@ -258,9 +270,12 @@ selection sticks to the task through repeat presses even after it leaves the vie
 **Create:** `a` add here — inline, after the selection. Date context: Today →
 `sched:today`, Tomorrow → `sched:tomorrow`, **Upcoming → the date of the section
 you're in** (copied off the sibling you're next to; falls back to end of this
-week), project drill-in → tagged with the project, Inbox → dateless · `c`
-quick-capture (modal, works from any view, parses `+project` / `due:…` as you
-type) · `B` new task that blocks the
+week), project drill-in → tagged with the project, Inbox → dateless · `A` **bulk
+add** — a paste box, one task per line; each line is treated exactly like `a`
+(same insertion point, date context, project), with list prefixes (`-`, `*`,
+`1.`, `[ ]`) stripped and any tokens in the line (`+proj`, `due:…`, `pri:A`)
+honored · `c` quick-capture (modal, works from any view, parses `+project` /
+`due:…` as you type) · `B` new task that blocks the
 selected one · `D` new task that depends on it · `F` follow-up: a dependent
 "follow up on <title>" task (leading "follow up on/with" stripped so chains don't
 stack), same project, `sched` +3 days — blocked until you've done the original, so
@@ -270,7 +285,8 @@ can `x` it right away.
 
 **Not rebindable:** `1`–`9` switch view · `⌃1`–`⌃9` Nth project · `g g` top ·
 `Tab`/`Shift-Tab` indent · `Esc` and `\` (leave drill-in → clear filters →
-deselect) · Projects view `↵`/`o`/click open, `j`/`k` then `e`/`n`/`l`/`C`/`r`/`a`
+deselect) · Projects view `↵`/`o`/click open, `j`/`k` then `J`/`K` reorder or
+`e`/`n`/`l`/`C`/`r` edit or `a` new
 
 **Pickers:** the project-filter (`P`) and set-project (`p`) pickers are numbered —
 the letter then a digit jumps straight to that entry (filter: `1` = first

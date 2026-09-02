@@ -901,6 +901,13 @@ button.kbd:hover {
   gap: 8px;
 }
 
+.pcardnum {
+  flex: none;
+  min-width: 1.6em;
+  color: var(--dim);
+  font-size: 11px;
+}
+
 .pname {
   background: none;
   border: 0;

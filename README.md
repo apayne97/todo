@@ -97,8 +97,9 @@ status: drafting
 
 Manage them on the Projects view (`8`): **click a project** (or `↵`) to open a
 full editable task list for it — buckets by date, "show done" toggle. Inside,
-`⌃1`–`⌃9` swaps to another project and `\` goes back to the card list. To just
-highlight a card for `e`/`r`/`n`/`l`/`C`, use `j`/`k`.
+`⌃1`–`⌃9` swaps to another project and `\` goes back to the card list. To
+highlight a card without opening it, use `j`/`k` — then `J`/`K` reorder it (this
+writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it.
 
 ## Keys
 
@@ -111,7 +112,8 @@ Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `n` note, `l` link, `.`/`b` dependency overlay, `p` set project,
 `⌃1`–`⌃9` Nth project — swaps the drill-in, or toggles the list filter (numbered
 in the sidebar); `P` for the picker, `\` clear filters / leave drill-in,
-`a` add, `c` quick-capture, `F` follow-up task (blocked on this, +3d), `u` undo.
+`a` add, `A` bulk add (paste, one task per line), `c` quick-capture,
+`F` follow-up task (blocked on this, +3d), `u` undo.
 
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
 it, `＋` to add one, "Reset all to defaults". Overrides are saved on the server

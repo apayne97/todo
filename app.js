@@ -62,6 +62,7 @@ const ACTIONS = {
   undo: { group: "Selected item", label: "undo", run: () => undo() },
 
   add: { group: "Create", label: "add item here", run: () => addItem() },
+  bulkAdd: { group: "Create", label: "bulk add — paste, one task per line", run: () => bulkAdd() },
   capture: { group: "Create", label: "quick capture", run: () => openCapture() },
   newBlocking: { group: "Create", label: "new task that blocks this", sel: true, run: ({ sel }) => createLinkedItem(sel, "blocking") },
   newDependent: { group: "Create", label: "new task that depends on this", sel: true, run: ({ sel }) => createLinkedItem(sel, "dependent") },
@@ -79,7 +80,7 @@ const DEFAULT_BINDINGS = {
   schedMinusWeek: ["{"], schedPlusWeek: ["}"],
   schedMinusMonth: ["("], schedPlusMonth: [")"],
   moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
-  add: ["a"], capture: ["c"],
+  add: ["a"], bulkAdd: ["A"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"], followUp: ["F"],
 };
 
@@ -91,7 +92,7 @@ const FIXED_KEYS = [
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
   ["Esc / \\", "leave project drill-in → clear filters → deselect"],
   ["Projects: click / ↵ / o", "open — all of that project's tasks, editable"],
-  ["Projects: j/k then e n l C r", "description · info · link · color · rename"],
+  ["Projects: j/k then …", "J/K reorder (renumbers ⌃N) · e n l C r edit · a new"],
 ];
 
 const state = {
@@ -372,11 +373,30 @@ function parseRepeat(v) {
   return { kind: m[1] || "+", n: Number(m[2]), u: m[3] };
 }
 
+// Effective project order: the explicit `order:` list first (state.model
+// .projectOrder, set by reorderProject), then anything unlisted, alphabetically.
+// This order drives the sidebar, the ⌃1–⌃9 mapping, the P picker and the cards.
 function allProjects() {
   const s = new Set();
   for (const it of state.model.items) for (const p of it.projects) s.add(p);
   for (const p of state.model.projects) s.add(p.name);
-  return [...s].sort();
+  const ord = state.model.projectOrder || [];
+  const pos = (n) => {
+    const i = ord.indexOf(n);
+    return i < 0 ? 1e6 : i;
+  };
+  return [...s].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
+}
+
+function reorderProject(name, dir) {
+  const order = allProjects();
+  const i = order.indexOf(name);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  mutate(() => {
+    [order[i], order[j]] = [order[j], order[i]];
+    state.model.projectOrder = order;
+  });
 }
 
 function autoColor(name) {
@@ -1035,7 +1055,7 @@ function renderProjects(main) {
   const hint = document.createElement("div");
   hint.className = "dayhead";
   hint.textContent =
-    "click a project (or ↵) to open its tasks · j/k then e description · r rename · n info · l link · C color · a new";
+    "click / ↵ open · j/k select, then: J/K reorder · e description · r rename · n info · l link · C color · a new";
   main.append(hint);
 
   if (!rows.length) {
@@ -1046,13 +1066,18 @@ function renderProjects(main) {
     return;
   }
 
-  for (const p of rows) {
+  rows.forEach((p, i) => {
     const card = document.createElement("div");
     card.className = "pcard" + (p.name === state.selectedId ? " sel" : "");
     card.onclick = () => openProjectDetail(p.name);
 
     const head = document.createElement("div");
     head.className = "phead";
+    const num = document.createElement("span");
+    num.className = "pcardnum";
+    num.textContent = i < 9 ? `⌃${i + 1}` : "";
+    if (i < 9) num.title = `⌃${i + 1} filters/opens this project`;
+    head.append(num);
     const dot = document.createElement("span");
     dot.className = "dot";
     dot.style.background = projColor(p.name);
@@ -1103,7 +1128,7 @@ function renderProjects(main) {
       card.append(meta);
     }
     main.append(card);
-  }
+  });
 }
 
 function editProjectDesc(name) {
@@ -2006,6 +2031,41 @@ function addItem() {
   });
 }
 
+// Paste a block of text → one task per line, each treated like a fresh `a`:
+// same insertion point, view date-context and project. Common list prefixes
+// (-, *, 1., "[ ]") are stripped; tokens inside a line (+proj, due:…, pri:A) win.
+function bulkAdd() {
+  askText("bulk add — one task per line  (⇧↵ to add)", "", (text) => {
+    const lines = text
+      .split("\n")
+      .map((l) => l.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\[[ xX]?\]\s*)?/, "").trim())
+      .filter(Boolean);
+    if (!lines.length) return;
+    mutate(() => {
+      const items = state.model.items;
+      const sel = selectedItem();
+      const depth = sel ? sel.depth : 0;
+      let at = sel ? subtreeRange(sel)[1] : 0;
+      const sched = newItemSched(sel);
+      const proj = state.projectView || state.projectFilter || null;
+      const created = todayISO();
+      const added = [];
+      for (const line of lines) {
+        const it = P.parse("- [ ] " + normalizeDatesInText(line)).items[0];
+        it.depth = depth;
+        it.created = created;
+        if (sched && !it.sched && !it.due) it.sched = sched;
+        if (proj && !it.projects.length) it.projects = [proj];
+        items.splice(at++, 0, it);
+        added.push(it);
+      }
+      P.ensureIds(items);
+      if (added[0]) state.selectedId = added[0].id;
+    });
+    toast(`added ${lines.length} task${lines.length > 1 ? "s" : ""}`);
+  });
+}
+
 // Create a new task linked to `sel` by a dependency, then edit its title.
 //   "blocking"  → new task must be done first (sel needs it), inserted before sel
 //   "dependent" → new task waits on sel (it needs sel), inserted after sel's subtree
@@ -2376,7 +2436,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // Projects view: contextual keys (not rebindable)
-  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a"].includes(k)) {
+  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a", "J", "K"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -2385,6 +2445,8 @@ document.addEventListener("keydown", (e) => {
         editProjectDesc(name);
       });
     if (!state.selectedId) return;
+    if (k === "J") return reorderProject(state.selectedId, -1);
+    if (k === "K") return reorderProject(state.selectedId, 1);
     if (k === "Enter" || k === "o") return openProjectDetail(state.selectedId);
     if (k === "n") return editProjectMeta(state.selectedId);
     if (k === "l") return editProjectLink(state.selectedId);

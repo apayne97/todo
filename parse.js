@@ -193,6 +193,7 @@ export function parse(text) {
   const items = [];
   const preamble = [];
   const projects = [];
+  let projectOrder = []; // explicit `order:` line in ## Projects, if any
   let cur = null;
   let curProject = null;
   let section = "active"; // active | done | projects
@@ -209,7 +210,12 @@ export function parse(text) {
         projects.push(curProject);
         continue;
       }
-      if (!curProject || line.trim() === "") continue;
+      if (!curProject) {
+        const om = /^order:\s*(.+)$/i.exec(line.trim());
+        if (om) projectOrder = om[1].split(",").map((s) => s.trim()).filter(Boolean);
+        continue;
+      }
+      if (line.trim() === "") continue;
       const pl = LINK_RE.exec(line.trim());
       if (pl) { if (!curProject.link) curProject.link = pl[1]; continue; }
       const pc = COLOR_RE.exec(line.trim());
@@ -244,6 +250,7 @@ export function parse(text) {
   return {
     items,
     preamble,
+    projectOrder,
     projects: projects.map((p) => ({
       name: p.name,
       desc: p.desc.join("\n"),
@@ -303,13 +310,35 @@ export function serialize(model) {
   out.push("");
   for (const r of done) emit(r);
 
-  const projects = (model.projects || []).filter(
+  // `order:` — the user's explicit project ordering (drives sidebar / ⌃N).
+  // Only written once they've reordered; then it names every project, in order.
+  const allNames = new Set();
+  for (const it of model.items) for (const p of it.projects) allNames.add(p);
+  for (const p of model.projects || []) allNames.add(p.name);
+  const ord = model.projectOrder || [];
+  const orderedNames = [
+    ...ord.filter((n) => allNames.has(n)),
+    ...[...allNames].filter((n) => !ord.includes(n)).sort(),
+  ];
+  const showOrder = ord.length > 0 && orderedNames.length > 1;
+
+  let projects = (model.projects || []).filter(
     (p) => p.name && (p.desc.trim() || p.meta.length || (p.link || "").trim() || (p.color || "").trim())
   );
-  if (projects.length) {
+  if (showOrder) {
+    projects = projects
+      .slice()
+      .sort((a, b) => orderedNames.indexOf(a.name) - orderedNames.indexOf(b.name));
+  }
+
+  if (projects.length || showOrder) {
     out.push("");
     out.push("## Projects");
     out.push("");
+    if (showOrder) {
+      out.push(`order: ${orderedNames.join(", ")}`);
+      out.push("");
+    }
     for (const p of projects) {
       out.push(`### ${p.name}`);
       if (p.desc.trim()) out.push(p.desc.trim());
