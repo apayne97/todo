@@ -1409,6 +1409,14 @@ function shortcutsEditorEl() {
     demo.href = "?demo";
     demo.textContent = "Open the demo — a sandbox with every feature on display →";
     wrap.append(demo);
+
+    const bookmarklet = document.createElement("a");
+    bookmarklet.className = "demolink";
+    bookmarklet.href = "/bookmarklet.html";
+    bookmarklet.target = "_blank";
+    bookmarklet.rel = "noopener noreferrer";
+    bookmarklet.textContent = "Get the job-posting capture bookmarklet →";
+    wrap.append(bookmarklet);
   }
   return wrap;
 }

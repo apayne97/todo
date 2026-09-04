@@ -127,6 +127,23 @@ Open `http://localhost:4444/?demo` for a read-only sandbox loaded from
 a feature. Changes stay in memory; reload to reset. There's a link to it on the
 Shortcuts view.
 
+## Capturing job postings
+
+Open `http://localhost:4444/bookmarklet.html` (also linked from the Shortcuts
+view) and drag the button to your bookmarks bar. On any job posting, click it: it
+reads the page's `schema.org` `JobPosting` structured data — most ATSs (Greenhouse,
+Workday, Lever, LinkedIn) embed this for Google Jobs — confirms the role/company
+with you, and adds `apply to <company> — <role>` to `todos.md`, tagged
+`+industry-job-application`, with the posting link, location, salary, and closing
+date (as `due:`) in the note. Falls back to asking by hand if a page has no
+structured data.
+
+This works from **any site**, not just the app itself: `server.mjs` exposes a
+CORS-open `POST /capture` endpoint (`{ title, url?, due?, note? }`) that the
+bookmarklet's `fetch()` calls — see [bookmarklet.js](bookmarklet.js) for the source.
+`bookmarklet.html` is generated from it; after editing the source, run
+`npm run build:bookmarklet` to regenerate the draggable link.
+
 ## Tests
 
 ```bash

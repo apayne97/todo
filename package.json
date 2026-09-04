@@ -6,6 +6,7 @@
   "description": "Local keyboard-driven todo app over a plain-text Markdown ground truth",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "build:bookmarklet": "node build-bookmarklet.mjs"
   }
 }

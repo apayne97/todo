@@ -22,6 +22,11 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag
   - `GET`/`PUT /config` → `todo.config.json` (UI prefs — key bindings; gitignored)
+  - `POST /capture` → `{ title, url?, due?, note? }`, appends one task tagged
+    `+industry-job-application` to the top of the active list. CORS-open (`Access-
+    Control-Allow-Origin: *`) so the [job-posting bookmarklet](bookmarklet.js),
+    running on whatever site the posting lives on, can call it; it can only ever
+    add a well-formed line, never overwrite or delete.
   - auto `git commit` after each successful write (clean history; Claude always
     sees current state)
 - **Run:** `npm start`, or a `.claude/launch.json` entry so it's one command.

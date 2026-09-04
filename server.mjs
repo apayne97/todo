@@ -14,8 +14,11 @@
 //                       commits local. (Disabling autocommit disables push too.)
 //
 // API:
-//   GET  /todos   -> { text, etag }        etag is the file mtime
-//   PUT  /todos   body { text, etag }      412 if etag is stale, else writes atomically
+//   GET  /todos    -> { text, etag }        etag is the file mtime
+//   PUT  /todos    body { text, etag }      412 if etag is stale, else writes atomically
+//   POST /capture  body { title, url?, due?, note? }   appends one task (see below);
+//                  CORS-open so the browser-extension/bookmarklet can call it from
+//                  any origin — it can only ever add a line to todos.md, nothing else.
 // Everything else is served as a static file from this directory.
 
 import { createServer } from "node:http";
@@ -23,6 +26,7 @@ import { readFile, writeFile, rename, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, extname, normalize } from "node:path";
+import * as P from "./parse.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -176,6 +180,57 @@ const server = createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ ok: true }), { "Content-Type": MIME[".json"] });
     }
     return send(res, 405, "method not allowed");
+  }
+
+  if (url.pathname === "/capture") {
+    // Called from the job-posting bookmarklet, which runs on whatever site the
+    // posting lives on — so this is deliberately CORS-open. It can only ever
+    // append one well-formed task to todos.md; nothing it accepts can overwrite
+    // or delete existing content.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") return send(res, 204, "");
+    if (req.method !== "POST") return send(res, 405, "method not allowed");
+
+    let payload;
+    try {
+      payload = JSON.parse(await readBody(req));
+    } catch {
+      return send(res, 400, JSON.stringify({ error: "bad json" }), { "Content-Type": MIME[".json"] });
+    }
+    const title = String(payload.title || "").trim();
+    if (!title) {
+      return send(res, 400, JSON.stringify({ error: "title required" }), { "Content-Type": MIME[".json"] });
+    }
+
+    let text = "";
+    try {
+      text = await readFile(FILE, "utf8");
+    } catch {
+      text = "# Todos\n\n## Done\n";
+    }
+    const model = P.parse(text);
+    const today = P.iso(new Date());
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(payload.due || "") ? payload.due : null;
+    let raw = `- [ ] ${title} +industry-job-application`;
+    if (due) raw += ` due:${due}`;
+    raw += ` created:${today}`;
+    const it = P.parse(raw).items[0];
+    if (payload.url) it.link = String(payload.url).trim();
+    if (payload.note) it.notes = [String(payload.note).trim()];
+
+    // same insertion point as the app's own quick-capture: top of the active list
+    const items = model.items;
+    const firstDone = items.findIndex((x) => x.done && x.depth === 0);
+    items.splice(firstDone < 0 ? items.length : firstDone, 0, it);
+    P.ensureIds(items);
+
+    const tmp = FILE + ".tmp-" + process.pid;
+    await writeFile(tmp, P.serialize(model), "utf8");
+    await rename(tmp, FILE);
+    scheduleCommit();
+    return send(res, 200, JSON.stringify({ ok: true, id: it.id }), { "Content-Type": MIME[".json"] });
   }
 
   // static files
