@@ -138,7 +138,7 @@ dependent task straight into title-edit without opening the overlay.
 | 4 | Inbox      | no `sched`, no `due`                                                  |
 | 5 | Done       | completed, grouped by day, newest first — plus the graph              |
 | 6 | Blocked    | items waiting on a dependency, plus a "ready" and a "problems" section |
-| 7 | Recurring  | every not-done item with a `repeat:` token, whatever its date          |
+| 7 | Habits     | weekly habit goals (progress / streak / best / 8-week sparkline), with a recurring-tasks section below |
 | 8 | Projects   | one card per project; click / `↵` opens a full editable task list for it |
 | 9 | Shortcuts  | full keyboard reference                                               |
 
@@ -229,6 +229,58 @@ tagged with the project. While you're in it:
 list filter to the Nth project — the sidebar shows the number next to each, `\`
 clears. `P` opens the same list as a numbered picker. So `⌃N` means "the Nth
 project" everywhere; context decides whether that's a drill-in swap or a filter.
+
+## Habits
+
+Weekly habit goals live in a `## Habits` section at the end of `todos.md`:
+
+```markdown
+## Habits
+
+### hackerrank
+30 min HackerRank / LeetCode
+goal: 3/week
+best: 6
+```
+
+`### name` starts a habit; the following lines are the description, except
+`goal: N/week` (the weekly target — bare `goal: N` is also accepted) and
+`best: N` (the all-time-high streak, maintained by the app). Unlike projects, a
+habit only exists as a `### block` — there's no tag-only form — and it's never
+pruned.
+
+A **rep** is any completed item tagged `+<habit name>` with a `done:` date.
+Pressing `x` (or `↵`) on a selected habit logs one now — it appends
+`- [x] <name> +<name> created:<today> done:<today>` under `## Done`, so reps
+show up in the Done view and graph like any other completion. Delete a wrongly
+logged rep from the Done view (`x` to un-complete).
+
+Per habit the card shows, for the current ISO week (Monday start):
+
+- **`X / Y this week`** + a progress bar (green once the goal is met).
+- **streak** — consecutive weeks the goal was met, walking back from the last
+  *completed* week; the in-progress week adds to it only once it's already met.
+  A missed completed week resets it to 0.
+- **best** — the highest streak ever. Recomputed from `## Done` history and also
+  persisted as the `best:` line, so it survives even if old done items are later
+  trimmed.
+- **8-week sparkline** — one cell per week (oldest → this week); filled green for
+  a met week, dim-blue for a partial week, the current week outlined.
+
+Keys on the Habits view (not rebindable): `j`/`k` select · `x` / `↵` log a rep ·
+`e` description · `g` goal · `r` rename · `a` new habit.
+
+**Archiving.** `#` on an active habit **archives** it — an `archived: <date>`
+line is added, the card drops to a muted **archived** section at the bottom, and
+it stops counting toward its goal and toward `/start`'s "behind pace" check. The
+`### block`, `best:`, and every logged rep in `## Done` are kept and frozen (no
+new `best:` is ever written while archived). On an archived habit: `↵` (or `x`)
+**restores** it to active; `#` again **deletes** it for good — the definition
+*and* the reps it logged (a `## Done` line whose title and only `+tag` are the
+habit name). Archive keeps history; delete removes it.
+
+Below the habit cards, a **recurring tasks** section lists every not-done item
+with a `repeat:` token (what the old Recurring view showed), so nothing is lost.
 
 ## Done view + graph
 

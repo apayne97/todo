@@ -9,12 +9,12 @@ const VIEWS = [
   ["inbox", "Inbox"],
   ["done", "Done"],
   ["blocked", "Blocked"],
-  ["recurring", "Recurring"],
+  ["habits", "Habits"],
   ["projects", "Projects"],
   ["shortcuts", "Shortcuts"],
 ];
 
-const NO_COUNT = ["done", "projects", "shortcuts"];
+const NO_COUNT = ["done", "habits", "projects", "shortcuts"];
 
 // views where the list order is driven purely by date — changing an item's date
 // shuffles it around, so after a date edit the cursor holds its spot in the list
@@ -98,10 +98,11 @@ const FIXED_KEYS = [
   ["Esc / \\", "leave project drill-in → clear filters → deselect"],
   ["Projects: click / ↵ / o", "open — all of that project's tasks, editable"],
   ["Projects: j/k then …", "J/K reorder (renumbers ⌃N) · e n l C r edit · a new"],
+  ["Habits: j/k then …", "x log a rep · e desc · g goal · r rename · # archive (↵ restores; # again deletes) · a new"],
 ];
 
 const state = {
-  model: { items: [], preamble: [], projects: [] },
+  model: { items: [], preamble: [], projects: [], habits: [] },
   etag: "0",
   view: "today",
   selectedId: null,
@@ -242,6 +243,10 @@ async function load() {
 
 function recompute() {
   P.computeStatus(state.model, todayISO());
+  const habits = P.computeHabitStats(state.model, todayISO());
+  let bumped = false;
+  for (const h of habits) if (h._bestChanged) { h.best = h._best; bumped = true; }
+  if (bumped) scheduleSave(); // persist a new all-time streak record
 }
 
 let saveTimer = null;
@@ -390,6 +395,9 @@ function allProjects() {
   const s = new Set();
   for (const it of state.model.items) for (const p of it.projects) s.add(p);
   for (const p of state.model.projects) s.add(p.name);
+  // habit tags (from logged reps) aren't projects — keep them out of the
+  // sidebar / ⌃N mapping / P picker
+  for (const h of state.model.habits || []) s.delete(h.name);
   const ord = state.model.projectOrder || [];
   const pos = (n) => {
     const i = ord.indexOf(n);
@@ -529,7 +537,6 @@ function viewMatch(it, view, t, we) {
     // would just be a duplicate.
     return isReady(it) && !s && !d;
   }
-  if (view === "recurring") return !!it.repeat;
   return false;
 }
 
@@ -1056,6 +1063,219 @@ function stat(n, label) {
   return s;
 }
 
+// ---------- habits view ----------
+
+// selectedId on the Habits view is "habit:<name>" so it never collides with a
+// task id in state._flat (recurring tasks share the list below the cards).
+function selectedHabit() {
+  const s = String(state.selectedId || "");
+  if (!s.startsWith("habit:")) return null;
+  return (state.model.habits || []).find((h) => h.name === s.slice(6)) || null;
+}
+
+function renderHabits(main) {
+  const habits = state.model.habits || [];
+  const active = habits.filter((h) => !h.archived);
+  const archived = habits.filter((h) => h.archived);
+  const recurring = P.buildTrees(state.model.items).filter(
+    (r) => anyDesc(r, (x) => !x.done && !!x.repeat)
+  );
+  state._flat = [];
+
+  const hint = document.createElement("div");
+  hint.className = "dayhead";
+  hint.textContent =
+    "weekly goals · j/k select, then: x log one now · e description · g goal · r rename · # archive · a new";
+  main.append(hint);
+
+  if (!active.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = archived.length
+      ? "No active habits. Press a to add one, or ↵ on an archived one to bring it back."
+      : 'No habits yet. Press a to add one (e.g. "hackerrank", goal 3).';
+    main.append(e);
+  }
+
+  for (const h of active) {
+    state._flat.push("habit:" + h.name);
+    main.append(habitCardEl(h));
+  }
+
+  if (recurring.length) {
+    main.append(sectionHeadEl(`recurring tasks · ${recurring.length}`));
+    walkRows(recurring, main);
+  }
+
+  if (archived.length) {
+    main.append(sectionHeadEl(`archived · ${archived.length}  ·  ↵ restore · # delete`));
+    for (const h of archived) {
+      state._flat.push("habit:" + h.name);
+      main.append(archivedHabitRow(h));
+    }
+  }
+}
+
+function archivedHabitRow(h) {
+  const row = document.createElement("div");
+  row.className = "harch" + ("habit:" + h.name === state.selectedId ? " sel" : "");
+  row.onclick = () => selectItem("habit:" + h.name);
+  const name = document.createElement("span");
+  name.className = "harchname";
+  name.textContent = h.name;
+  row.append(name);
+  const meta = document.createElement("span");
+  meta.className = "harchmeta";
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(h.archived) ? ` · archived ${relDay(h.archived)}` : "";
+  meta.textContent =
+    `best ${h._best || h.best || 0}w · ${h._total || 0} all-time${when}`;
+  row.append(meta);
+  return row;
+}
+
+function habitCardEl(h) {
+  const goal = h._goal || 0;
+  const done = h._thisWeek || 0;
+  const card = document.createElement("div");
+  card.className = "pcard hcard" + ("habit:" + h.name === state.selectedId ? " sel" : "");
+  card.onclick = () => selectItem("habit:" + h.name);
+
+  const head = document.createElement("div");
+  head.className = "phead";
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  dot.style.background = projColor(h.name);
+  head.append(dot);
+  const name = document.createElement("span");
+  name.className = "pname";
+  name.textContent = h.name;
+  head.append(name);
+  const counts = document.createElement("span");
+  counts.className = "pcounts";
+  counts.textContent = goal
+    ? `${done} / ${goal} this week${done >= goal ? "  ✓" : ""}`
+    : `${done} this week · no goal (g)`;
+  head.append(counts);
+  card.append(head);
+
+  if (h.desc) {
+    const d = document.createElement("div");
+    d.className = "pdesc";
+    d.textContent = h.desc;
+    card.append(d);
+  }
+
+  if (goal) {
+    const bar = document.createElement("div");
+    bar.className = "hbar";
+    const fill = document.createElement("span");
+    fill.style.width = Math.min(100, Math.round((done / goal) * 100)) + "%";
+    if (done >= goal) fill.classList.add("met");
+    bar.append(fill);
+    card.append(bar);
+  }
+
+  const streak = document.createElement("div");
+  streak.className = "hstreak";
+  streak.textContent =
+    `streak ${h._streak || 0}w · best ${h._best || 0}w · ${h._total || 0} all-time`;
+  card.append(streak);
+
+  const spark = document.createElement("div");
+  spark.className = "hspark";
+  spark.title = "last 8 weeks";
+  for (const wk of h._spark || []) {
+    const cell = document.createElement("span");
+    cell.className =
+      "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : "");
+    cell.title = `${wk.n} rep${wk.n === 1 ? "" : "s"}${wk.current ? " (this week)" : ""}`;
+    spark.append(cell);
+  }
+  card.append(spark);
+
+  return card;
+}
+
+function logHabit(h) {
+  const day = todayISO();
+  mutate(() => {
+    const it = P.parse(`- [x] ${h.name} +${h.name} created:${day} done:${day}`).items[0];
+    state.model.items.push(it);
+    P.ensureIds(state.model.items);
+  });
+  toast(`logged ${h.name} — ${h._thisWeek} / ${h._goal || "–"} this week`);
+}
+
+function newHabit() {
+  ask('new habit name (spaces become "-")', "", (v) => {
+    const name = slugifyProject(v);
+    if (!name) return;
+    if ((state.model.habits || []).some((h) => h.name === name))
+      return toast(`"${name}" already exists`);
+    ask(`${name} — goal per week (a number)`, "3", (g) => {
+      const goal = Math.max(0, parseInt(g, 10) || 0);
+      mutate(() => {
+        (state.model.habits ||= []).push({ name, desc: "", meta: [], goal, best: 0 });
+      });
+      state.selectedId = "habit:" + name;
+      render();
+    });
+  });
+}
+
+function editHabitDesc(h) {
+  askText(`${h.name} — description`, h.desc || "", (v) => mutate(() => (h.desc = v.trim())));
+}
+
+function editHabitGoal(h) {
+  ask(`${h.name} — goal per week`, String(h.goal ?? ""), (v) => {
+    const goal = Math.max(0, parseInt(v, 10) || 0);
+    mutate(() => (h.goal = goal));
+  });
+}
+
+function renameHabit(h) {
+  ask(`rename "${h.name}" to`, h.name, (v) => {
+    const name = slugifyProject(v);
+    if (!name || name === h.name) return;
+    if ((state.model.habits || []).some((x) => x.name === name))
+      return toast(`"${name}" already exists`);
+    const old = h.name;
+    mutate(() => {
+      h.name = name;
+      for (const it of state.model.items)
+        it.projects = it.projects.map((p) => (p === old ? name : p));
+    });
+    state.selectedId = "habit:" + name;
+    render();
+  });
+}
+
+// Soft-retire: the `### block`, best, and all logged reps stay; the habit drops
+// to the archived list and stops counting toward its goal / the /start check.
+function archiveHabit(h) {
+  mutate(() => (h.archived = todayISO()));
+  toast(`archived ${h.name}`);
+}
+
+function restoreHabit(h) {
+  mutate(() => (h.archived = null));
+  toast(`restored ${h.name}`);
+}
+
+function deleteHabit(h) {
+  // hard delete: drop the definition AND the reps it logged (title === name,
+  // tagged +name). Archive is the path that keeps history — delete removes it.
+  mutate(() => {
+    state.model.habits = (state.model.habits || []).filter((x) => x !== h);
+    state.model.items = state.model.items.filter(
+      (it) => !(it.done && it.title === h.name && it.projects.length === 1 && it.projects[0] === h.name)
+    );
+  });
+  state.selectedId = null;
+  render();
+}
+
 // ---------- projects view ----------
 
 function renderProjects(main) {
@@ -1441,6 +1661,7 @@ function paintList(main) {
   else if (state.view === "projects") renderProjects(main);
   else if (state.view === "done") renderDone(main);
   else if (state.view === "blocked") renderBlocked(main);
+  else if (state.view === "habits") renderHabits(main);
   else renderList(main);
 }
 
@@ -2431,6 +2652,31 @@ document.addEventListener("keydown", (e) => {
     state.projectView = null;
     state.selectedId = null;
     return render();
+  }
+
+  // Habits view: contextual keys (not rebindable) — must precede the g-chord.
+  // Only intercept when a habit card is selected; a recurring task in the list
+  // below falls through to the normal task keys.
+  if (state.view === "habits") {
+    if (k === "a") {
+      e.preventDefault();
+      return newHabit();
+    }
+    const h = selectedHabit();
+    if (h && ["x", "Enter", "e", "g", "r", "#", "Delete"].includes(k)) {
+      e.preventDefault();
+      if (h.archived) {
+        // progressive delete: ↵/x restores, # (again) purges for good
+        if (k === "Enter" || k === "x") return restoreHabit(h);
+        if (k === "#" || k === "Delete") return deleteHabit(h);
+        return; // e/g/r don't apply to an archived habit
+      }
+      if (k === "x" || k === "Enter") return logHabit(h);
+      if (k === "e") return editHabitDesc(h);
+      if (k === "g") return editHabitGoal(h);
+      if (k === "r") return renameHabit(h);
+      return archiveHabit(h); // # / Delete — soft, reversible
+    }
   }
 
   // g g chord → top (not rebindable)

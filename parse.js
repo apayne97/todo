@@ -193,15 +193,39 @@ export function parse(text) {
   const items = [];
   const preamble = [];
   const projects = [];
+  const habits = [];
   let projectOrder = []; // explicit `order:` line in ## Projects, if any
   let cur = null;
   let curProject = null;
-  let section = "active"; // active | done | projects
+  let curHabit = null;
+  let section = "active"; // active | done | projects | habits
   let seenItem = false;
 
   for (const line of lines) {
     if (/^##\s+done\s*$/i.test(line.trim())) { section = "done"; cur = null; continue; }
     if (/^##\s+projects\s*$/i.test(line.trim())) { section = "projects"; cur = null; continue; }
+    if (/^##\s+habits\s*$/i.test(line.trim())) { section = "habits"; cur = null; curHabit = null; continue; }
+
+    if (section === "habits") {
+      const hh = /^###\s+(.+?)\s*$/.exec(line);
+      if (hh) {
+        curHabit = { name: hh[1].trim(), desc: [], meta: [], goal: null, best: 0, archived: null };
+        habits.push(curHabit);
+        continue;
+      }
+      if (!curHabit) continue;
+      if (line.trim() === "") continue;
+      const gm = /^goal:\s*(\d+)\s*(?:\/\s*(?:week|wk|w))?\s*$/i.exec(line.trim());
+      if (gm) { curHabit.goal = Number(gm[1]); continue; }
+      const bm = /^best:\s*(\d+)\s*(?:weeks?|wks?|w)?\s*$/i.exec(line.trim());
+      if (bm) { curHabit.best = Number(bm[1]); continue; }
+      const am = /^archived:\s*(\d{4}-\d{2}-\d{2})?\s*$/i.exec(line.trim());
+      if (am) { curHabit.archived = am[1] || "yes"; continue; }
+      const hkv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
+      if (hkv) curHabit.meta.push([hkv[1], hkv[2]]);
+      else curHabit.desc.push(line.trim());
+      continue;
+    }
 
     if (section === "projects") {
       const ph = /^###\s+(.+?)\s*$/.exec(line);
@@ -257,6 +281,14 @@ export function parse(text) {
       meta: p.meta,
       link: p.link || "",
       color: p.color || "",
+    })),
+    habits: habits.map((h) => ({
+      name: h.name,
+      desc: h.desc.join("\n"),
+      meta: h.meta,
+      goal: h.goal,
+      best: h.best || 0,
+      archived: h.archived || null,
     })),
   };
 }
@@ -349,6 +381,22 @@ export function serialize(model) {
     }
   }
 
+  const habits = (model.habits || []).filter((h) => h.name);
+  if (habits.length) {
+    out.push("");
+    out.push("## Habits");
+    out.push("");
+    for (const h of habits) {
+      out.push(`### ${h.name}`);
+      if ((h.desc || "").trim()) out.push(h.desc.trim());
+      if (h.goal != null) out.push(`goal: ${h.goal}/week`);
+      if (h.best) out.push(`best: ${h.best}`);
+      if (h.archived) out.push(`archived: ${/^\d{4}-\d{2}-\d{2}$/.test(h.archived) ? h.archived : ""}`.trimEnd());
+      for (const [k, v] of h.meta || []) out.push(`${k}: ${v}`);
+      out.push("");
+    }
+  }
+
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + "\n";
 }
 
@@ -433,6 +481,88 @@ export function computeStatus(model, todayISO) {
     for (const c of it.children) propagate(c, it._effSched, it._effDue);
   };
   for (const r of buildTrees(items)) propagate(r, null, null);
+}
+
+// Monday (ISO week start, Monday=0) for a Date.
+function mondayOf(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+
+// Derived weekly-habit stats. Habits are the `## Habits` blocks; a "rep" is any
+// done item tagged `+<habit name>` with a `done:` date. Goals are N-per-week
+// (ISO week, Monday start). A missed *completed* week resets the current streak;
+// the in-progress week never breaks it. `best` is the all-time high — the caller
+// persists it back onto the habit when `_bestChanged` is set.
+export function computeHabitStats(model, todayISO) {
+  const today = parseISO(todayISO) || new Date();
+  const curMon = mondayOf(today);
+  const habits = model.habits || [];
+
+  for (const h of habits) {
+    h._archived = !!h.archived;
+    const goal = Number(h.goal) || 0;
+    const reps = [];
+    for (const it of model.items) {
+      if (it.done && it.doneDate && it.projects.includes(h.name)) reps.push(it.doneDate);
+    }
+    reps.sort();
+
+    const countWeek = (offset) => {
+      const start = iso(addDays(curMon, -7 * offset));
+      const end = iso(addDays(curMon, -7 * offset + 7));
+      let n = 0;
+      for (const ds of reps) if (ds >= start && ds < end) n++;
+      return n;
+    };
+
+    const thisWeek = countWeek(0);
+    h._goal = goal;
+    h._thisWeek = thisWeek;
+    h._total = reps.length;
+    h._met = goal > 0 && thisWeek >= goal;
+
+    // last 8 weeks, oldest -> newest (newest = this week, in progress)
+    h._spark = [];
+    for (let w = 7; w >= 0; w--) {
+      const n = countWeek(w);
+      h._spark.push({ n, hit: goal > 0 && n >= goal, current: w === 0 });
+    }
+
+    // current streak: consecutive met weeks back from the last *completed* week,
+    // plus this week once it's already met.
+    let streak = 0;
+    if (goal > 0) {
+      for (let w = 1; w < 520; w++) {
+        if (countWeek(w) >= goal) streak++;
+        else break;
+      }
+      if (thisWeek >= goal) streak++;
+    }
+    h._streak = streak;
+
+    // best streak ever: scan every week from the first rep forward.
+    let best = Number(h.best) || 0;
+    if (goal > 0 && reps.length) {
+      const weeksBack = Math.round((curMon - mondayOf(parseISO(reps[0]))) / 604800000);
+      let run = 0;
+      for (let w = weeksBack; w >= 0; w--) {
+        if (countWeek(w) >= goal) {
+          run++;
+          if (run > best) best = run;
+        } else if (w > 0) {
+          run = 0;
+        }
+      }
+    }
+    h._best = Math.max(best, streak);
+    // an archived habit's record is frozen — never write a new best back
+    h._bestChanged = !h.archived && h._best > (Number(h.best) || 0);
+  }
+
+  return habits;
 }
 
 // ---------- mutations ----------

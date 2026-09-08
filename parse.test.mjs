@@ -234,3 +234,78 @@ test("parent completes when all children are checked", () => {
   P.toggleDone(model, "b2", "2026-08-26");
   assert.equal(model.items.find((i) => i.id === "p1").done, true);
 });
+
+test("Habits section round-trips and computes weekly stats", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [ ] unrelated id:z1",
+    "",
+    "## Done",
+    "",
+    "- [x] hackerrank +hackerrank created:2026-08-24 done:2026-08-25 id:d1",
+    "- [x] hackerrank +hackerrank created:2026-08-26 done:2026-08-27 id:d2",
+    "- [x] hackerrank +hackerrank created:2026-08-31 done:2026-09-01 id:d3",
+    "- [x] hackerrank +hackerrank created:2026-09-02 done:2026-09-02 id:d4",
+    "- [x] hackerrank +hackerrank created:2026-09-03 done:2026-09-03 id:d5",
+    "",
+    "## Habits",
+    "",
+    "### hackerrank",
+    "30 min HackerRank / LeetCode",
+    "goal: 3/week",
+    "best: 4",
+    "",
+  ].join("\n");
+  const model = P.parse(src);
+  assert.equal(model.habits.length, 1);
+  assert.equal(model.habits[0].name, "hackerrank");
+  assert.equal(model.habits[0].goal, 3);
+  assert.equal(model.habits[0].best, 4);
+  assert.equal(model.habits[0].desc, "30 min HackerRank / LeetCode");
+
+  const again = P.parse(P.serialize(model));
+  assert.equal(again.habits[0].goal, 3);
+  assert.equal(again.habits[0].best, 4);
+  assert.equal(again.habits[0].desc, "30 min HackerRank / LeetCode");
+
+  // Wed 2026-09-09: this ISO week is Mon 09-07..Sun 09-13 (0 reps),
+  // last week Mon 08-31..Sun 09-06 has 3 reps (09-01, 09-02, 09-03) -> met,
+  // week before (08-24..08-30) has 2 reps (08-25, 08-27) -> missed -> streak stops.
+  const [h] = P.computeHabitStats(model, "2026-09-09");
+  assert.equal(h._thisWeek, 0);
+  assert.equal(h._streak, 1);
+  assert.equal(h._best, 4); // stored best still wins
+  assert.equal(h._total, 5);
+  assert.equal(h._spark.length, 8);
+});
+
+test("an archived habit round-trips and freezes its best streak", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [x] leetcode +leetcode created:2026-09-01 done:2026-09-02 id:l1",
+    "- [x] leetcode +leetcode created:2026-09-03 done:2026-09-03 id:l2",
+    "- [x] leetcode +leetcode created:2026-09-04 done:2026-09-04 id:l3",
+    "",
+    "## Done",
+    "",
+    "## Habits",
+    "",
+    "### leetcode",
+    "goal: 2/week",
+    "best: 3",
+    "archived: 2026-09-05",
+    "",
+  ].join("\n");
+  const model = P.parse(src);
+  assert.equal(model.habits[0].archived, "2026-09-05");
+
+  const again = P.parse(P.serialize(model));
+  assert.equal(again.habits[0].archived, "2026-09-05");
+  assert.equal(again.habits[0].best, 3);
+
+  const [h] = P.computeHabitStats(model, "2026-09-14");
+  assert.equal(h._archived, true);
+  assert.equal(h._bestChanged, false); // frozen even if a longer run exists in history
+});

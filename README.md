@@ -101,10 +101,30 @@ full editable task list for it — buckets by date, "show done" toggle. Inside,
 highlight a card without opening it, use `j`/`k` — then `J`/`K` reorder it (this
 writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it.
 
+Weekly **habit goals** go in a `## Habits` section:
+
+```markdown
+## Habits
+
+### hackerrank
+30 min HackerRank / LeetCode
+goal: 3/week
+best: 6
+```
+
+On the Habits view (`7`), each habit shows `X / Y this week`, current streak
+(consecutive weeks the goal was met — a missed week resets it), the all-time
+best streak, and an 8-week sparkline. `j`/`k` to select, then `x` (or `↵`) logs
+a rep now (a `- [x] … +<name>` line under `## Done`), `e` description, `g` goal,
+`r` rename, `a` new. `#` **archives** a habit (adds an `archived:` line, moves it
+to a muted section at the bottom, stops it counting toward the goal — history is
+kept); on an archived habit, `↵` restores it and `#` deletes it and its logged
+reps for good. Recurring (`repeat:`) tasks are listed below the habit cards.
+
 ## Keys
 
 Views `1`–`9`: Today · Tomorrow · Upcoming (rest of week / next week / later) ·
-Inbox · Done · Blocked · Recurring · Projects · Shortcuts.
+Inbox · Done · Blocked · Habits · Projects · Shortcuts.
 
 Press `?` in the app for the full list. Highlights: `j` up / `k` down, `x` done,
 `T` today, `t` tomorrow, `w` next Monday, `s`/`d` dates, `S` push dates to subtasks,
