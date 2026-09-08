@@ -316,6 +316,13 @@ selection moves to the row that took its slot — the next one down — falling 
 to the new last row if it was the last, and clearing only when the list is now
 empty. Keeps you working straight down without scrolling back.
 
+On the **date-driven views** (Today, Tomorrow, Upcoming — `DATE_VIEWS`) the same
+"hold the slot" rule also applies when a date edit only *shuffles* the row within
+the view instead of removing it — e.g. `T` on an overdue Today item drops it into
+the "today" section further down. The cursor stays where you were so you can keep
+`T`-ing straight down the overdue list. Repeat-press actions that opt out with
+`keepSel` (the `]`/`[` nudges) are unaffected — they still ride the item.
+
 ## Undo
 
 In-memory stack of the last ~50 mutations, each storing the prior raw line(s).

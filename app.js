@@ -16,6 +16,11 @@ const VIEWS = [
 
 const NO_COUNT = ["done", "projects", "shortcuts"];
 
+// views where the list order is driven purely by date — changing an item's date
+// shuffles it around, so after a date edit the cursor holds its spot in the list
+// rather than chasing the item to its new home (you're working straight down)
+const DATE_VIEWS = new Set(["today", "tomorrow", "upcoming"]);
+
 // Every rebindable shortcut. `sel: true` = needs a selected item. `run({ sel })`.
 const ACTIONS = {
   down: { group: "Navigate", label: "move down", run: () => moveSel(1) },
@@ -284,6 +289,7 @@ const _coalesce = {};
 // opts.keepSel: don't chase the selection to a new row if the current one left
 //   the view — for repeat-press actions (nudge) that keep operating on one task
 function mutate(fn, opts = {}) {
+  const dateView = DATE_VIEWS.has(state.view);
   const now = Date.now();
   const merge = opts.coalesce && now - (_coalesce[opts.coalesce] || 0) < 700;
   _coalesce[opts.coalesce] = now;
@@ -297,10 +303,14 @@ function mutate(fn, opts = {}) {
   scheduleSave();
   const paint = opts.reorderOnly ? renderMain : render;
   paint();
-  // if the change pushed the selected item out of view (bump, done, delete…),
-  // move to the row that took its slot — the next one down — or, if it was the
-  // last row, the new last row. Only clears when the list is now empty.
-  if (!opts.keepSel && prevIdx >= 0 && state.selectedId && !state._flat.includes(state.selectedId)) {
+  // Hold the cursor's spot in the list, rather than chasing the item, when the
+  // change either (a) pushed it out of view entirely (bump, done, delete…) or
+  // (b) — on a date-driven view — just shuffled it to a new position because its
+  // date changed. Either way you keep working straight down the list.
+  const nowIdx = state._flat.indexOf(state.selectedId);
+  const gone = nowIdx < 0;
+  const shuffled = !opts.reorderOnly && dateView && nowIdx >= 0 && nowIdx !== prevIdx;
+  if (!opts.keepSel && prevIdx >= 0 && state.selectedId && (gone || shuffled)) {
     state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] ?? null;
     paint();
   }
