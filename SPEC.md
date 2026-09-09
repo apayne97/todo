@@ -84,6 +84,7 @@ clickable 🔗 chip. It's stored like the note but held separately.
 | Token             | Meaning                                                        | Set by      |
 |-------------------|---------------------------------------------------------------|-------------|
 | `+project`        | Area tag, repeatable                                           | user        |
+| `@home` `@work` `@transit` `@out` | Location context — where you'd do it (see **Location**) | user  |
 | `sched:YYYY-MM-DD`| Day it surfaces on the list (org `SCHEDULED`)                  | user / bump |
 | `due:YYYY-MM-DD`  | Hard deadline (org `DEADLINE`); shown even when unscheduled     | user        |
 | `created:YYYY-MM-DD` | Creation date                                              | app         |
@@ -201,12 +202,15 @@ order: grant, home, garden
 NIH R01 renewal. First draft to OSP by March 1.
 color: #4da6e5
 link: https://notion.so/grant-board
+location: work
 status: drafting
 lead: me
 ```
 
 `### name` starts a project; following lines are the description, except the
-special `color:` / `link:` lines and `key: value` lines (structured info). A
+special `color:` / `link:` / `location:` lines and `key: value` lines (structured
+info). `location:` (one of `home` / `work` / `transit` / `out`) flows onto every
+task in the project — see **Location**. A
 project exists as soon as a task is tagged `+name` — the `## Projects` entry only
 adds description / color / link / info, and entries with none of those are pruned
 on save.
@@ -242,6 +246,28 @@ tagged with the project. While you're in it:
 list filter to the Nth project — the sidebar shows the number next to each, `\`
 clears. `P` opens the same list as a numbered picker. So `⌃N` means "the Nth
 project" everywhere; context decides whether that's a drill-in swap or a filter.
+
+## Location
+
+Where you'd do a task: **`@home` `@work` `@transit` `@out`** on the task line.
+No tag = "anywhere" (shows regardless of filter). A `location:` line on a
+`### project` block gives every task in that project a location unless the task
+overrides with its own `@tag`; subtasks inherit from their parent.
+`computeStatus` resolves all this into `it._effLocation` (own tag → project →
+inherited); the row shows an `@loc` chip, dashed when inherited.
+
+It's a **filter axis**, separate from the project filter and independent of it:
+
+- **Desktop:** `@` opens a location picker; the sidebar has a `location` row
+  (`@` anywhere / home / work / transit / out); `\` clears all filters. `,` sets
+  the location on the selected task.
+- **Mobile:** a `📍 location` button next to `⚑ project`, its own sheet.
+- Applies to the **date + inbox views only** (not Blocked/Done/Habits). Tab
+  counts stay unfiltered.
+- A task created while a location filter is active inherits that location.
+- **Per-machine default:** `TODO_LOCATION=work` (env) seeds the filter on load,
+  so the work Mac starts filtered to `@work`, the home Mac to `@home`. Still
+  clearable/changeable per session.
 
 ## Habits
 
@@ -442,11 +468,12 @@ Today / Inbox rows:
 Today splits **overdue** above **today** when both exist. Views filter on
 effective dates (a subtask stays with its parent). Blocked items are hidden.
 
-**Project filter** — a `⚑ filter` control in the top bar opens a sheet listing
-`allProjects()` (+ "All tasks"). Picking one filters Today and Inbox to tasks in
-that project (`anyDesc` on `+tag`); an active-filter chip with `✕` replaces the
-button. Tab counts stay unfiltered. The Habits tab ignores it (no filter UI
-there). `projColor` / `allProjects` are ported into `mobile.js`.
+**Filters** — two independent controls in the top bar: `⚑ project` and
+`📍 location`, each opening its own sheet. Picking one filters Today and Inbox
+(`anyDesc` on `+tag` / `_effLocation`, untagged always shown for location); an
+active-filter chip with `✕` replaces the button. Tab counts stay unfiltered. The
+Habits tab ignores both. Location seeds from the server's `TODO_LOCATION`.
+`projColor` / `allProjects` are ported into `mobile.js`.
 
 **Habits tab** — one card per non-archived habit: `X / Y this week` + bar, current
 streak / best, an 8-week sparkline, and a big **log a rep** button (appends

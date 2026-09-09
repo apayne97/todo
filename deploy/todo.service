@@ -40,6 +40,9 @@ Environment=TODO_PORT=4444
 Environment=TODO_FILE=%h/todo-data/todos.md
 Environment=TODO_AUTOPUSH=1
 # Environment=TODO_PASSWORD=set-me-once-this-is-reachable-from-outside
+# Leave TODO_LOCATION unset here — this box mostly serves the phone (/m), and the
+# phone is the device that actually moves between contexts, so it should start
+# unfiltered and let you pick. Set it on a Mac's LaunchAgent instead.
 
 [Install]
 WantedBy=default.target

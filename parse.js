@@ -111,17 +111,22 @@ function blankItem(depth, done) {
     bumps: 0,
     pri: null,
     id: null,
+    location: null, // @home | @work | @transit | @out
     extra: [], // unknown tokens, preserved verbatim
     notes: [],
     link: null, // a single URL, stored on its own "link: …" line
   };
 }
 
+export const LOCATIONS = ["home", "work", "transit", "out"];
+const LOC_RE = /^@(home|work|transit|out)$/;
+const PROJ_LOC_RE = /^location:\s*(home|work|transit|out)\s*$/i;
 const LINK_RE = /^link:\s+(\S+)$/i;
 const COLOR_RE = /^color:\s+(\S.*)$/i;
 
 const TOKEN_TESTS = [
   /^\+[\w-]+$/,
+  LOC_RE,
   /^sched:\d{4}-\d{2}-\d{2}$/,
   /^due:\d{4}-\d{2}-\d{2}$/,
   /^created:\d{4}-\d{2}-\d{2}$/,
@@ -142,6 +147,7 @@ function looksLikeToken(tok) {
 function applyToken(it, tok) {
   let m;
   if ((m = /^\+([\w-]+)$/.exec(tok))) { it.projects.push(m[1]); return true; }
+  if ((m = LOC_RE.exec(tok))) { it.location = m[1]; return true; }
   if ((m = /^sched:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.sched = m[1]; return true; }
   if ((m = /^due:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.due = m[1]; return true; }
   if ((m = /^created:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.created = m[1]; return true; }
@@ -171,6 +177,7 @@ export function itemBody(it) {
   const p = [];
   if (it.title.trim()) p.push(it.title.trim());
   for (const proj of it.projects) p.push(`+${proj}`);
+  if (it.location) p.push(`@${it.location}`);
   if (it.sched) p.push(`sched:${it.sched}`);
   if (it.due) p.push(`due:${it.due}`);
   if (it.repeat) p.push(`repeat:${it.repeat.kind}${it.repeat.n}${it.repeat.u}`);
@@ -230,7 +237,7 @@ export function parse(text) {
     if (section === "projects") {
       const ph = /^###\s+(.+?)\s*$/.exec(line);
       if (ph) {
-        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null, color: null };
+        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null, color: null, location: null };
         projects.push(curProject);
         continue;
       }
@@ -244,6 +251,8 @@ export function parse(text) {
       if (pl) { if (!curProject.link) curProject.link = pl[1]; continue; }
       const pc = COLOR_RE.exec(line.trim());
       if (pc) { if (!curProject.color) curProject.color = pc[1].trim(); continue; }
+      const ploc = PROJ_LOC_RE.exec(line.trim());
+      if (ploc) { if (!curProject.location) curProject.location = ploc[1].toLowerCase(); continue; }
       const kv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
       if (kv) curProject.meta.push([kv[1], kv[2]]);
       else curProject.desc.push(line.trim());
@@ -281,6 +290,7 @@ export function parse(text) {
       meta: p.meta,
       link: p.link || "",
       color: p.color || "",
+      location: p.location || "",
     })),
     habits: habits.map((h) => ({
       name: h.name,
@@ -355,7 +365,9 @@ export function serialize(model) {
   const showOrder = ord.length > 0 && orderedNames.length > 1;
 
   let projects = (model.projects || []).filter(
-    (p) => p.name && (p.desc.trim() || p.meta.length || (p.link || "").trim() || (p.color || "").trim())
+    (p) =>
+      p.name &&
+      (p.desc.trim() || p.meta.length || (p.link || "").trim() || (p.color || "").trim() || (p.location || "").trim())
   );
   if (showOrder) {
     projects = projects
@@ -376,6 +388,7 @@ export function serialize(model) {
       if (p.desc.trim()) out.push(p.desc.trim());
       if ((p.color || "").trim()) out.push(`color: ${p.color.trim()}`);
       if ((p.link || "").trim()) out.push(`link: ${p.link.trim()}`);
+      if ((p.location || "").trim()) out.push(`location: ${p.location.trim()}`);
       for (const [k, v] of p.meta) out.push(`${k}: ${v}`);
       out.push("");
     }
@@ -481,6 +494,24 @@ export function computeStatus(model, todayISO) {
     for (const c of it.children) propagate(c, it._effSched, it._effDue);
   };
   for (const r of buildTrees(items)) propagate(r, null, null);
+
+  // Effective location: the task's own @tag, else its first tagged project's
+  // `location:`, else inherited down from an ancestor. Filtering keys off this.
+  const projLoc = new Map((model.projects || []).map((p) => [p.name, p.location || null]));
+  for (const it of items) {
+    it._ownLoc = it.location || null;
+    if (!it._ownLoc) {
+      for (const pn of it.projects) {
+        const l = projLoc.get(pn);
+        if (l) { it._ownLoc = l; break; }
+      }
+    }
+  }
+  const propLoc = (it, pLoc) => {
+    it._effLocation = it._ownLoc || pLoc || null;
+    for (const c of it.children) propLoc(c, it._effLocation);
+  };
+  for (const r of buildTrees(items)) propLoc(r, null);
 }
 
 // Monday (ISO week start, Monday=0) for a Date.

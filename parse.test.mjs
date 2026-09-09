@@ -309,3 +309,42 @@ test("an archived habit round-trips and freezes its best streak", () => {
   assert.equal(h._archived, true);
   assert.equal(h._bestChanged, false); // frozen even if a longer run exists in history
 });
+
+test("location: @tag on tasks, location: on projects, effective derivation", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [ ] pick up dry cleaning @out created:2026-09-09 id:o1",
+    "- [ ] reply to Slack +work-things created:2026-09-09 id:w1",
+    "  - [ ] draft the reply id:w2",
+    "- [ ] water plants +home-stuff @work id:h1",
+    "- [ ] anywhere id:a1",
+    "",
+    "## Done",
+    "",
+    "## Projects",
+    "",
+    "### work-things",
+    "location: work",
+    "",
+    "### home-stuff",
+    "color: #7ad19a",
+    "location: home",
+    "",
+  ].join("\n");
+  const m = P.parse(src);
+  assert.equal(m.items[0].location, "out");
+  assert.equal(m.projects.find((p) => p.name === "work-things").location, "work");
+
+  P.computeStatus(m, "2026-09-09");
+  const by = (id) => m.items.find((i) => i.id === id);
+  assert.equal(by("o1")._effLocation, "out"); // own tag
+  assert.equal(by("w1")._effLocation, "work"); // from project
+  assert.equal(by("w2")._effLocation, "work"); // inherited from parent
+  assert.equal(by("h1")._effLocation, "work"); // own @tag beats project's location:
+  assert.equal(by("a1")._effLocation, null); // untagged
+
+  const again = P.parse(P.serialize(m));
+  assert.equal(again.items[0].location, "out");
+  assert.equal(again.projects.find((p) => p.name === "home-stuff").location, "home");
+});

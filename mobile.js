@@ -24,8 +24,10 @@ const state = {
   saving: false,
   dirty: false,
   adding: false,
-  filterOpen: false,
+  filterOpen: false, // "project" | "location" | false
   projectFilter: null, // project name, or null
+  locationFilter: null, // "home" | "work" | "transit" | "out" | null
+  _locSeeded: false,
   undo: null, // { text, label }
   toastMsg: null,
   _preEdit: null,
@@ -73,11 +75,15 @@ async function load() {
     const r = await fetch(API, { headers: { "Cache-Control": "no-cache" } });
     if (r.status === 401) return gotoLogin();
     if (!r.ok) throw new Error("http " + r.status);
-    const { text, etag } = await r.json();
+    const { text, etag, location: locDefault } = await r.json();
     state.model = P.parse(text);
     state.etag = etag;
     state.loaded = true;
     state.offline = false;
+    if (!state._locSeeded) {
+      state._locSeeded = true;
+      if (locDefault && P.LOCATIONS.includes(locDefault)) state.locationFilter = locDefault;
+    }
     recompute();
     cacheSnapshot(text, etag);
     render();
@@ -228,6 +234,7 @@ function addTask(raw) {
     if (!it.sched && !it.due && state.view === "today") it.sched = todayISO();
     // inbox / habits → leave undated
     if (!it.projects.length && state.projectFilter) it.projects = [state.projectFilter];
+    if (!it.location && state.locationFilter) it.location = state.locationFilter;
     if (!it.created) it.created = todayISO();
     const items = state.model.items;
     const firstDone = items.findIndex((x) => x.done && x.depth === 0);
@@ -261,8 +268,14 @@ function anyDesc(it, pred) {
 function rootsFor(view, ignoreFilter) {
   const t = todayISO();
   const pf = ignoreFilter ? null : state.projectFilter;
+  const lf = ignoreFilter ? null : state.locationFilter;
+  const locOK = (x) => !x._effLocation || x._effLocation === lf; // untagged always shows
   return P.buildTrees(state.model.items).filter(
-    (r) => !r.done && matches(r, view, t) && (!pf || anyDesc(r, (x) => x.projects.includes(pf)))
+    (r) =>
+      !r.done &&
+      matches(r, view, t) &&
+      (!pf || anyDesc(r, (x) => x.projects.includes(pf))) &&
+      (!lf || anyDesc(r, locOK))
   );
 }
 
@@ -346,7 +359,10 @@ function render() {
   if (state.filterOpen) app.append(filterSheetEl());
 }
 
+const LOC_LABEL = { home: "🏠 home", work: "🏢 work", transit: "🚌 in transit", out: "🛒 out" };
+
 function filterSheetEl() {
+  const isLoc = state.filterOpen === "location";
   const wrap = document.createElement("div");
   wrap.className = "sheet-wrap";
   wrap.onclick = (e) => {
@@ -358,28 +374,35 @@ function filterSheetEl() {
   const sheet = document.createElement("div");
   sheet.className = "sheet";
   const h = document.createElement("h2");
-  h.textContent = "Filter by project";
+  h.textContent = isLoc ? "Filter by location" : "Filter by project";
   sheet.append(h);
 
-  const pick = (name) => {
-    state.projectFilter = name;
+  const pick = (v) => {
+    if (isLoc) state.locationFilter = v;
+    else state.projectFilter = v;
     state.filterOpen = false;
     render();
   };
 
+  const cur = isLoc ? state.locationFilter : state.projectFilter;
   const all = document.createElement("button");
-  all.className = "projrow" + (state.projectFilter ? "" : " on");
-  all.textContent = "All tasks";
+  all.className = "projrow" + (cur ? "" : " on");
+  all.textContent = isLoc ? "Anywhere" : "All tasks";
   all.onclick = () => pick(null);
   sheet.append(all);
 
-  for (const name of allProjects()) {
+  const opts = isLoc ? P.LOCATIONS : allProjects();
+  for (const name of opts) {
     const row = document.createElement("button");
-    row.className = "projrow" + (state.projectFilter === name ? " on" : "");
-    const dot = document.createElement("span");
-    dot.className = "dot";
-    dot.style.background = projColor(name);
-    row.append(dot, document.createTextNode(name));
+    row.className = "projrow" + (cur === name ? " on" : "");
+    if (isLoc) {
+      row.textContent = LOC_LABEL[name] || name;
+    } else {
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = projColor(name);
+      row.append(dot, document.createTextNode(name));
+    }
     row.onclick = () => pick(name);
     sheet.append(row);
   }
@@ -422,28 +445,55 @@ function topEl() {
   status.append(sync);
 
   if (state.view !== "habits") {
+    const controls = document.createElement("span");
+    controls.className = "filterctls";
+
+    // project
     if (state.projectFilter) {
       const chip = document.createElement("button");
       chip.className = "filterchip";
       const dot = document.createElement("span");
       dot.className = "dot";
       dot.style.background = projColor(state.projectFilter);
-      chip.append(dot, document.createTextNode(state.projectFilter + "  ✕"));
+      chip.append(dot, document.createTextNode(state.projectFilter + " ✕"));
       chip.onclick = () => {
         state.projectFilter = null;
         render();
       };
-      status.append(chip);
+      controls.append(chip);
     } else {
-      const fbtn = document.createElement("button");
-      fbtn.className = "filterbtn";
-      fbtn.textContent = "⚑ filter";
-      fbtn.onclick = () => {
-        state.filterOpen = true;
+      const b = document.createElement("button");
+      b.className = "filterbtn";
+      b.textContent = "⚑ project";
+      b.onclick = () => {
+        state.filterOpen = "project";
         render();
       };
-      status.append(fbtn);
+      controls.append(b);
     }
+
+    // location
+    if (state.locationFilter) {
+      const chip = document.createElement("button");
+      chip.className = "filterchip";
+      chip.textContent = (LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕";
+      chip.onclick = () => {
+        state.locationFilter = null;
+        render();
+      };
+      controls.append(chip);
+    } else {
+      const b = document.createElement("button");
+      b.className = "filterbtn";
+      b.textContent = "📍 location";
+      b.onclick = () => {
+        state.filterOpen = "location";
+        render();
+      };
+      controls.append(b);
+    }
+
+    status.append(controls);
   }
   top.append(status);
 
@@ -469,8 +519,12 @@ function paintList(main) {
   if (!roots.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.textContent = state.projectFilter
-      ? `Nothing in +${state.projectFilter} ${state.view === "today" ? "due today" : "here"}.`
+    const filt = [
+      state.projectFilter && `+${state.projectFilter}`,
+      state.locationFilter && `@${state.locationFilter}`,
+    ].filter(Boolean).join(" · ");
+    e.textContent = filt
+      ? `Nothing in ${filt} ${state.view === "today" ? "due today" : "here"}.`
       : state.view === "today"
         ? "Nothing due today. 🎉"
         : "Inbox is empty.";
@@ -618,6 +672,12 @@ function cardEl(it) {
     const c = document.createElement("span");
     c.className = "chip proj";
     c.textContent = "+" + p;
+    meta.append(c);
+  }
+  if (it._effLocation) {
+    const c = document.createElement("span");
+    c.className = "chip loc" + (it.location ? "" : " inherited");
+    c.textContent = "@" + it._effLocation;
     meta.append(c);
   }
   if (it.repeat) {

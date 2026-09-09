@@ -56,8 +56,8 @@ squeezed onto a phone. Three tabs (**Today / Habits / Inbox**):
 - **Today / Inbox:** tap the circle to complete (recurring rolls forward, with a
   6s **Undo**), tap a row to expand its note / link / subtasks and a snooze row
   (**Tomorrow · Next week · Pick day**), **+** to add one task through the same
-  parser as desktop `a` (`buy milk +life due:friday`). **⚑ filter** in the top
-  bar narrows Today/Inbox to one project.
+  parser as desktop `a` (`buy milk +life due:friday`). Two filter buttons —
+  **⚑ project** and **📍 location** — each narrow Today/Inbox.
 - **Habits:** a card per habit — `X / Y this week`, streak / best, 8-week
   sparkline, and a big **log a rep** button. Set habits up on the desktop; the
   phone is just for logging them.
@@ -154,6 +154,13 @@ full editable task list for it — buckets by date, "show done" toggle. Inside,
 `⌃1`–`⌃9` swaps to another project and `\` goes back to the card list. To
 highlight a card without opening it, use `j`/`k` — then `J`/`K` reorder it (this
 writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it.
+
+**Location.** Tag a task `@home` / `@work` / `@transit` / `@out` (no tag = do it
+anywhere). A `location: work` line on a project applies to all its tasks. `@` on
+the desktop (or the sidebar `location` row) filters the day/inbox views to one
+context — home tasks vanish while you're at work, and vice-versa; `,` sets a
+task's location. On mobile it's the `📍 location` button. `TODO_LOCATION=work`
+in the server env seeds the filter, so each machine starts in its own context.
 
 Weekly **habit goals** go in a `## Habits` section:
 

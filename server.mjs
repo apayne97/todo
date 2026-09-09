@@ -19,6 +19,8 @@
 //                       TODO_PULL_SECS so edits made on another machine (phone via
 //                       the always-on box, the other Mac) show up here.
 //   TODO_PULL_SECS      how often to pull the data repo (default 30; 0 = never).
+//   TODO_LOCATION       per-machine default for the location filter — one of
+//                       home|work|transit|out. Seeds the app's filter on load.
 //   TODO_PASSWORD       if set, gate /todos and /config behind a password (a
 //                       signed cookie via /login). Unset = no auth. Set it once
 //                       the server is reachable from outside localhost/LAN.
@@ -58,6 +60,10 @@ const CONFIG = resolve(HERE, "todo.config.json");
 const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT !== "0";
 const AUTOPUSH = AUTOCOMMIT && process.env.TODO_AUTOPUSH !== "0";
 const PULL_SECS = process.env.TODO_PULL_SECS != null ? Number(process.env.TODO_PULL_SECS) : 30;
+// Per-machine default for the app's location filter (this Mac = "work", the home
+// Mac = "home", …). One of home|work|transit|out, or "" for none. The apps seed
+// their filter from this on first load; the user can still change or clear it.
+const LOCATION = P.LOCATIONS.includes(process.env.TODO_LOCATION) ? process.env.TODO_LOCATION : "";
 
 // Optional password gate. TODO_PASSWORD unset -> no auth (localhost / same-LAN
 // use is unchanged). Set it once the server is reachable from outside (Tailscale,
@@ -290,7 +296,7 @@ const server = createServer(async (req, res) => {
       } catch {
         text = "# Todos\n\n## Done\n";
       }
-      return send(res, 200, JSON.stringify({ text, etag: await etagOf(FILE) }), {
+      return send(res, 200, JSON.stringify({ text, etag: await etagOf(FILE), location: LOCATION }), {
         "Content-Type": MIME[".json"],
       });
     }
@@ -416,6 +422,7 @@ server.listen(PORT, () => {
   );
   console.log(`auth       ${AUTH ? "on (TODO_PASSWORD set)" : "off — open to anyone who can reach this port"}`);
   console.log(`pull       ${AUTOPUSH && PULL_SECS > 0 ? `every ${PULL_SECS}s` : "off"}`);
+  if (LOCATION) console.log(`location   default filter: ${LOCATION}`);
 });
 
 if (AUTOPUSH && PULL_SECS > 0) {

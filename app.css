@@ -250,6 +250,16 @@ header h1 {
   color: var(--good);
 }
 
+.chip.loc {
+  color: var(--fg);
+  border-color: var(--dim);
+}
+
+.chip.loc.inherited {
+  color: var(--dim);
+  border-style: dashed;
+}
+
 .chip.bump {
   color: #d59bd5;
 }

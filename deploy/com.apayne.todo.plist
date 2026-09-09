@@ -41,6 +41,10 @@
     <string>/Users/apayne/life/todo-data/todos.md</string>
     <key>TODO_AUTOPUSH</key>
     <string>1</string>
+    <!-- this is the work Mac -> the app's location filter starts on @work.
+         home Mac uses "home". Remove to start unfiltered. -->
+    <key>TODO_LOCATION</key>
+    <string>work</string>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>

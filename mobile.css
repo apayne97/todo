@@ -107,9 +107,16 @@ button {
   flex: none;
 }
 
+.filterctls {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .filterbtn,
 .filterchip {
-  margin-left: auto;
   flex: none;
   display: flex;
   align-items: center;
@@ -255,6 +262,15 @@ main {
 
 .chip.rep {
   color: var(--accent);
+}
+
+.chip.loc {
+  color: var(--fg);
+}
+
+.chip.loc.inherited {
+  color: var(--dim);
+  border-style: dashed;
 }
 
 .chip.sub {

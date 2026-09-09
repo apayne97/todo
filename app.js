@@ -28,14 +28,16 @@ const ACTIONS = {
   bottom: { group: "Navigate", label: "jump to bottom", run: () => selectEdge(1) },
   search: { group: "Navigate", label: "search", run: () => openSearch() },
   filterProject: { group: "Navigate", label: "filter by project", run: () => openProjectFilter() },
+  filterLocation: { group: "Navigate", label: "filter by location", run: () => openLocationFilter() },
   clearFilters: {
     group: "Navigate",
-    label: "leave project view / clear search + filter",
+    label: "leave project view / clear search + filters",
     run: () => {
       if (state.projectView) return exitProjectDetail();
-      if (!state.search && !state.projectFilter) return;
+      if (!state.search && !state.projectFilter && !state.locationFilter) return;
       state.search = "";
       state.projectFilter = null;
+      state.locationFilter = null;
       render();
     },
   },
@@ -56,6 +58,7 @@ const ACTIONS = {
   schedMinusMonth: { group: "Nudge schedule", label: "−1 month", sel: true, run: ({ sel }) => nudgeSched(sel, -1, "m") },
   schedPlusMonth: { group: "Nudge schedule", label: "+1 month", sel: true, run: ({ sel }) => nudgeSched(sel, 1, "m") },
   setProject: { group: "Selected item", label: "set project", sel: true, run: ({ sel }) => openSetProject(sel) },
+  setLocation: { group: "Selected item", label: "set location", sel: true, run: ({ sel }) => openSetLocation(sel) },
   editTitle: { group: "Selected item", label: "edit title", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "title" }; render(); } },
   editLine: { group: "Selected item", label: "edit whole line", sel: true, run: ({ sel }) => { state.editing = { id: sel.id, mode: "full" }; render(); } },
   editNote: { group: "Selected item", label: "edit note", sel: true, run: ({ sel }) => editNote(sel) },
@@ -76,9 +79,9 @@ const ACTIONS = {
 
 const DEFAULT_BINDINGS = {
   down: ["k", "ArrowDown"], up: ["j", "ArrowUp"], bottom: ["G"],
-  search: ["/"], filterProject: ["P"], clearFilters: ["\\"], help: ["?"],
+  search: ["/"], filterProject: ["P"], filterLocation: ["@"], clearFilters: ["\\"], help: ["?"],
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
-  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"],
+  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"], setLocation: [","],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
   syncDates: ["S"],
   schedMinusDay: ["["], schedPlusDay: ["]"],
@@ -107,6 +110,8 @@ const state = {
   view: "today",
   selectedId: null,
   projectFilter: null,
+  locationFilter: null, // null | "home" | "work" | "transit" | "out"
+  _locSeeded: false, // per-machine default applied once
   search: "",
   dirty: false,
   saving: false,
@@ -235,9 +240,13 @@ async function load() {
   }
   const r = await fetch(API);
   if (r.status === 401) return void (location.href = "/login?next=" + encodeURIComponent(location.pathname));
-  const { text, etag } = await r.json();
+  const { text, etag, location: locDefault } = await r.json();
   state.model = P.parse(text);
   state.etag = etag;
+  if (!state._locSeeded) {
+    state._locSeeded = true;
+    if (locDefault && P.LOCATIONS.includes(locDefault)) state.locationFilter = locDefault;
+  }
   recompute();
   render();
 }
@@ -451,18 +460,19 @@ function projectEntry(name) {
 function ensureProjectEntry(name) {
   let e = projectEntry(name);
   if (!e) {
-    e = { name, desc: "", meta: [], link: "", color: "" };
+    e = { name, desc: "", meta: [], link: "", color: "", location: "" };
     state.model.projects.push(e);
   }
   if (e.link == null) e.link = "";
   if (e.color == null) e.color = "";
+  if (e.location == null) e.location = "";
   return e;
 }
 
 // name + description + info + color + live task counts, for the Projects view
 function projectSummaries() {
   return allProjects().map((name) => {
-    const e = projectEntry(name) || { name, desc: "", meta: [], link: "", color: "" };
+    const e = projectEntry(name) || { name, desc: "", meta: [], link: "", color: "", location: "" };
     const mine = state.model.items.filter((it) => it.projects.includes(name));
     const open = mine.filter((i) => !i.done);
     return {
@@ -471,6 +481,7 @@ function projectSummaries() {
       meta: e.meta,
       link: e.link || "",
       color: e.color || "",
+      location: e.location || "",
       open: open.length,
       done: mine.filter((i) => i.done).length,
       blocked: open.filter((i) => i.isBlocked).length,
@@ -561,9 +572,13 @@ function visibleRoots() {
   const q = state.search.toLowerCase();
   // the item being edited stays visible regardless of the current filters
   const editing = (r) => state.editing && anyDesc(r, (x) => x.id === state.editing.id);
+  // location filter — date + inbox views only; an untagged task always shows
+  const locOK = (x) => !state.locationFilter || !x._effLocation || x._effLocation === state.locationFilter;
+  const locFilterActive = state.locationFilter && state.view !== "blocked";
   return roots
     .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
     .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
+    .filter((r) => editing(r) || !locFilterActive || anyDesc(r, locOK))
     .filter((r) => editing(r) || !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
     // by date, then your manual order (file order) within a date — Array.sort is stable
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
@@ -658,6 +673,9 @@ function rowEl(it) {
     c.style.borderColor = projColor(p);
     body.append(c);
   }
+  // location: solid chip if the task carries its own @tag, ghosted if inherited
+  const loc = it._effLocation;
+  if (loc) body.append(chip("@" + loc, "loc" + (it.location ? "" : " inherited"), it.location ? "" : "from its project"));
   if (it.pri) body.append(chip(it.pri, "pri pri-" + it.pri));
   if (it.due) body.append(chip("due " + relDay(it.due), "due" + (P.daysBetween(it.due, todayISO()) <= 1 ? " hot" : "")));
   // In Today, an exact-today schedule is redundant; an overdue one still shows
@@ -1328,6 +1346,7 @@ function renderProjects(main) {
     name.title = "open this project";
     name.onclick = () => openProjectDetail(p.name);
     head.append(name);
+    if (p.location) head.append(chip("@" + p.location, "loc"));
     const counts = document.createElement("span");
     counts.className = "pcounts";
     counts.textContent =
@@ -1478,8 +1497,10 @@ function renderProjectDetail(main) {
 
 function editProjectMeta(name) {
   const e = projectEntry(name) || { meta: [] };
-  const initial = e.meta.map(([k, v]) => `${k}: ${v}`).join("\n");
-  askText(`${name} — info (one "key: value" per line)`, initial, (v) =>
+  const lines = [];
+  if (e.location) lines.push(`location: ${e.location}`);
+  for (const [k, v] of e.meta) lines.push(`${k}: ${v}`);
+  askText(`${name} — info (one "key: value" per line; location: home|work|transit|out)`, lines.join("\n"), (v) =>
     mutate(() => {
       const ent = ensureProjectEntry(name);
       const pairs = v
@@ -1490,10 +1511,12 @@ function editProjectMeta(name) {
           const m = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(l);
           return m ? [m[1], m[2]] : ["note", l];
         });
-      // a "link:" line here becomes the project's link, not a meta row
+      // "link:" and "location:" lines become structured fields, not meta rows
       const linkPair = pairs.find(([k]) => k.toLowerCase() === "link");
       if (linkPair) ent.link = linkPair[1];
-      ent.meta = pairs.filter(([k]) => k.toLowerCase() !== "link");
+      const locPair = pairs.find(([k]) => k.toLowerCase() === "location");
+      if (locPair) ent.location = P.LOCATIONS.includes(locPair[1].toLowerCase().trim()) ? locPair[1].toLowerCase().trim() : "";
+      ent.meta = pairs.filter(([k]) => !["link", "location"].includes(k.toLowerCase()));
     })
   );
 }
@@ -1744,6 +1767,34 @@ function render() {
       side.append(b);
     });
   }
+
+  // location filter — a small always-visible row (untagged tasks show regardless)
+  const lh = document.createElement("div");
+  lh.className = "sidehead";
+  lh.textContent = "location";
+  side.append(lh);
+  const lall = document.createElement("button");
+  lall.className = "navbtn tiny" + (state.locationFilter ? "" : " on");
+  lall.innerHTML = `<span class="nk">@</span> anywhere`;
+  lall.title = "clear location filter (@)";
+  lall.onclick = () => {
+    state.locationFilter = null;
+    render();
+  };
+  side.append(lall);
+  P.LOCATIONS.forEach((loc) => {
+    const b = document.createElement("button");
+    b.className = "navbtn tiny" + (state.locationFilter === loc ? " on" : "");
+    b.innerHTML = `<span class="nk"></span><span class="plabel">${LOC_LABEL[loc]}</span>`;
+    b.title = `show only @${loc} + untagged tasks`;
+    b.onclick = () => {
+      state.locationFilter = state.locationFilter === loc ? null : loc;
+      state.selectedId = null;
+      render();
+    };
+    side.append(b);
+  });
+
   app.append(side);
 
   const mainWrap = document.createElement("main");
@@ -1759,6 +1810,15 @@ function render() {
       render();
     };
     head.append(s);
+  }
+  if (state.locationFilter) {
+    const l = chip((LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕", "filter");
+    l.title = "location filter — untagged tasks still show. Click to clear.";
+    l.onclick = () => {
+      state.locationFilter = null;
+      render();
+    };
+    head.append(l);
   }
   if (!state.demo) {
     if (state.saveError) {
@@ -2284,6 +2344,7 @@ function addItem() {
     if (sched) it.sched = sched;
     if (state.projectView) it.projects = [state.projectView];
     else if (state.projectFilter) it.projects = [state.projectFilter];
+    if (state.locationFilter && !it.location) it.location = state.locationFilter;
     P.ensureIds(items);
     state.selectedId = it.id;
     state.editing = { id: it.id, mode: "title" };
@@ -2315,6 +2376,7 @@ function bulkAdd() {
         it.created = created;
         if (sched && !it.sched && !it.due) it.sched = sched;
         if (proj && !it.projects.length) it.projects = [proj];
+        if (state.locationFilter && !it.location) it.location = state.locationFilter;
         items.splice(at++, 0, it);
         added.push(it);
       }
@@ -2424,6 +2486,7 @@ function openCapture() {
       const it = P.parse("- [ ] " + normalizeDatesInText(v)).items[0];
       it.created = todayISO();
       if (state.projectFilter && !it.projects.length) it.projects = [state.projectFilter];
+      if (state.locationFilter && !it.location) it.location = state.locationFilter;
       const firstDone = state.model.items.findIndex((x) => x.done && x.depth === 0);
       state.model.items.splice(firstDone < 0 ? state.model.items.length : firstDone, 0, it);
       P.ensureIds(state.model.items);
@@ -2484,6 +2547,32 @@ function nudgeSched(sel, n, unit) {
   const base = sel.sched ? P.parseISO(sel.sched) : new Date();
   mutate(() => (sel.sched = P.iso(P.addUnit(base, n, unit))), { coalesce: "nudge", keepSel: true });
   toast(`"${(sel.title || "task").slice(0, 28)}" → ${relDay(sel.sched)}`);
+}
+
+const LOC_LABEL = { home: "🏠 home", work: "🏢 work", transit: "🚌 in transit", out: "🛒 out" };
+
+function openLocationFilter() {
+  const opts = [
+    ...P.LOCATIONS.map((l) => ({ value: l, label: LOC_LABEL[l] })),
+    { value: null, label: "Anywhere (clear)" },
+  ];
+  const cur = opts.findIndex((o) => o.value === state.locationFilter);
+  openPicker("Filter by location", opts, cur < 0 ? opts.length - 1 : cur, (v) => {
+    state.locationFilter = v;
+    state.selectedId = null;
+    render();
+  });
+}
+
+function openSetLocation(sel) {
+  const opts = [
+    { value: "", label: "(anywhere — no location)" },
+    ...P.LOCATIONS.map((l) => ({ value: l, label: LOC_LABEL[l] })),
+  ];
+  const cur = opts.findIndex((o) => o.value === (sel.location || ""));
+  openPicker("Set location", opts, cur < 0 ? 0 : cur, (v) => {
+    mutate(() => (sel.location = v || null));
+  });
 }
 
 function openSetProject(sel) {
