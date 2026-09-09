@@ -15,6 +15,10 @@
 //   TODO_AUTOPUSH       also push after committing, rebasing onto any concurrent
 //                       push first. ON by default; set TODO_AUTOPUSH=0 to keep
 //                       commits local. (Disabling autocommit disables push too.)
+//                       While on, the server also pulls the data repo every
+//                       TODO_PULL_SECS so edits made on another machine (phone via
+//                       the always-on box, the other Mac) show up here.
+//   TODO_PULL_SECS      how often to pull the data repo (default 30; 0 = never).
 //   TODO_PASSWORD       if set, gate /todos and /config behind a password (a
 //                       signed cookie via /login). Unset = no auth. Set it once
 //                       the server is reachable from outside localhost/LAN.
@@ -53,6 +57,7 @@ const CONFIG = resolve(HERE, "todo.config.json");
 // on one machine. Opt out with TODO_AUTOCOMMIT=0 (all local) or TODO_AUTOPUSH=0.
 const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT !== "0";
 const AUTOPUSH = AUTOCOMMIT && process.env.TODO_AUTOPUSH !== "0";
+const PULL_SECS = process.env.TODO_PULL_SECS != null ? Number(process.env.TODO_PULL_SECS) : 30;
 
 // Optional password gate. TODO_PASSWORD unset -> no auth (localhost / same-LAN
 // use is unchanged). Set it once the server is reachable from outside (Tailscale,
@@ -138,8 +143,39 @@ function stamp(d = new Date()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-let committing = false;
-let commitTimer = null;
+let committing = false; // a git operation (commit or background pull) is running
+let commitTimer = null; // pending debounced autosave, or null
+
+const gitTop = () => run("git", ["rev-parse", "--show-toplevel"], { cwd: dirname(FILE) });
+
+// Reconcile local `main` with origin WITHOUT ever leaving the repo half-merged.
+// todos.md is a single line-oriented file edited from several machines (this Mac,
+// the other Mac, the phone via the always-on box). A plain `pull --rebase` leaves
+// `<<<<<<<` markers in the file the moment two machines touch the same line, and
+// the server then serves — and re-commits — the broken file. Instead:
+//   - merge with `-X theirs`: non-conflicting local edits are kept; on a genuine
+//     same-line clash the copy already on origin wins (every machine converges to
+//     the same thing, and the local edit can just be redone — it's one task line).
+//   - if even that can't complete, abort and hard-reset to origin. A pending local
+//     edit is re-doable; a corrupted ground-truth file is not.
+// Returns true if the working file may have changed.
+async function reconcile(g) {
+  if ((await g(["fetch", "origin", "main"])).err) return false; // offline; try next tick
+  if (!(await g(["merge-base", "--is-ancestor", "origin/main", "HEAD"])).err) return false; // up to date or ahead
+  if (!(await g(["merge-base", "--is-ancestor", "HEAD", "origin/main"])).err) {
+    // purely behind — fast-forward.
+    return !(await g(["merge", "--ff-only", "origin/main"])).err;
+  }
+  // diverged: local commit(s) plus new stuff on origin. `-X theirs` keeps every
+  // non-conflicting local line and silently takes origin's side on any same-line
+  // clash — no markers ever reach the file.
+  if ((await g(["merge", "-X", "theirs", "--no-edit", "origin/main"])).err) {
+    await g(["merge", "--abort"]);
+    await g(["reset", "--hard", "origin/main"]);
+    console.log(`sync: could not merge cleanly, reset to origin @ ${stamp()} (a local edit may need redoing)`);
+  }
+  return true;
+}
 
 // Debounced (see scheduleCommit): a burst of edits collapses into one commit.
 // Operates on whichever git repo holds todos.md — which is its own repo once the
@@ -148,7 +184,7 @@ async function autosave() {
   if (committing) return scheduleCommit();
   committing = true;
   try {
-    const repo = await run("git", ["rev-parse", "--show-toplevel"], { cwd: dirname(FILE) });
+    const repo = await gitTop();
     if (repo.err) return;
     const g = (a) => run("git", ["-C", repo.stdout.trim(), ...a.filter((x) => x != null)]);
 
@@ -158,9 +194,9 @@ async function autosave() {
     await g(["commit", "-m", `todo: autosave ${stamp()}`, "--", FILE]);
     if (!AUTOPUSH) return;
 
-    // Other Claude sessions may share this repo — rebase onto any concurrent push.
+    // Push; if origin moved under us, reconcile (safely) and try once more.
     if ((await g(["push", "origin", "main"])).err) {
-      await g(["pull", "--rebase", "--autostash", "origin", "main"]);
+      await reconcile(g);
       await g(["push", "origin", "main"]);
     }
   } finally {
@@ -171,7 +207,25 @@ async function autosave() {
 function scheduleCommit() {
   if (!AUTOCOMMIT) return;
   clearTimeout(commitTimer);
-  commitTimer = setTimeout(() => void autosave(), 8000);
+  commitTimer = setTimeout(() => {
+    commitTimer = null;
+    void autosave();
+  }, 8000);
+}
+
+// Pull edits made on other machines. Cheap: one fetch of a one-file repo. Skipped
+// while a commit is pending or running (the autosave path reconciles itself).
+async function syncPull() {
+  if (!AUTOPUSH || committing || commitTimer) return;
+  committing = true;
+  try {
+    const repo = await gitTop();
+    if (repo.err) return;
+    const g = (a) => run("git", ["-C", repo.stdout.trim(), ...a.filter((x) => x != null)]);
+    if (await reconcile(g)) console.log(`pulled remote changes @ ${stamp()}`);
+  } finally {
+    committing = false;
+  }
 }
 
 function send(res, status, body, headers = {}) {
@@ -361,7 +415,13 @@ server.listen(PORT, () => {
     }`
   );
   console.log(`auth       ${AUTH ? "on (TODO_PASSWORD set)" : "off — open to anyone who can reach this port"}`);
+  console.log(`pull       ${AUTOPUSH && PULL_SECS > 0 ? `every ${PULL_SECS}s` : "off"}`);
 });
+
+if (AUTOPUSH && PULL_SECS > 0) {
+  void syncPull(); // catch up once right away, then on the interval
+  setInterval(() => void syncPull(), PULL_SECS * 1000).unref();
+}
 
 // flush pending edits on the way out
 let closing = false;
