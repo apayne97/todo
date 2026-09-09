@@ -40,7 +40,11 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
     each successful write (Claude always sees current state)
 - **Run:** `npm start`, or a `.claude/launch.json` entry so it's one command.
 - **Concurrency:** app re-fetches on window focus + every 10s; stale-ETag PUT
-  makes the app reload and replay the pending change.
+  makes the app reload and replay the pending change. A header chip shows sync
+  state — **saving…** (edit in flight) / **synced** (last PUT succeeded) /
+  **save failed · retry** (server unreachable — auto-retries every 4s, click to
+  retry now). "synced" means saved to the server file; the server's own git
+  push runs in the background.
 - **Sync with Claude:** Claude edits `~/life/todo-data/todos.md` directly; the
   app picks it up on the next focus/poll.
 

@@ -278,15 +278,20 @@ async function save() {
       state.etag = j.etag;
       toast("File changed on disk — reloaded. Re-apply your last edit.");
       state.dirty = false;
+      state.saveError = false;
       await load();
       return;
     }
     state.etag = j.etag;
     state.dirty = false;
+    state.saveError = false;
   } catch (e) {
-    toast("Save failed: " + e.message);
+    state.saveError = true; // stays dirty; retry shortly
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 4000);
   } finally {
     state.saving = false;
+    if (!RENDERING) render();
   }
 }
 
@@ -1755,7 +1760,17 @@ function render() {
     };
     head.append(s);
   }
-  if (state.dirty) head.append(chip("saving…", "saving"));
+  if (!state.demo) {
+    if (state.saveError) {
+      const c = chip("save failed · retry", "savefail", "couldn't reach the server — click to retry now");
+      c.onclick = () => save();
+      head.append(c);
+    } else if (state.dirty || state.saving) {
+      head.append(chip("saving…", "saving"));
+    } else {
+      head.append(chip("synced", "synced", "your edits are saved to the server"));
+    }
+  }
   if (state.demo) {
     const d = chip("DEMO · changes aren't saved · exit ✕", "demo");
     d.onclick = () => {

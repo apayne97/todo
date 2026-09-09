@@ -308,6 +308,21 @@ header h1 {
   border-color: var(--accent);
 }
 
+.chip.saving {
+  cursor: default;
+}
+
+.chip.synced {
+  color: var(--dim);
+  cursor: default;
+}
+
+.chip.savefail {
+  cursor: pointer;
+  color: var(--hot);
+  border-color: var(--hot);
+}
+
 .chip.demo {
   cursor: pointer;
   color: var(--bg);
