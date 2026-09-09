@@ -56,7 +56,8 @@ squeezed onto a phone. Three tabs (**Today / Habits / Inbox**):
 - **Today / Inbox:** tap the circle to complete (recurring rolls forward, with a
   6s **Undo**), tap a row to expand its note / link / subtasks and a snooze row
   (**Tomorrow · Next week · Pick day**), **+** to add one task through the same
-  parser as desktop `a` (`buy milk +life due:friday`).
+  parser as desktop `a` (`buy milk +life due:friday`). **⚑ filter** in the top
+  bar narrows Today/Inbox to one project.
 - **Habits:** a card per habit — `X / Y this week`, streak / best, 8-week
   sparkline, and a big **log a rep** button. Set habits up on the desktop; the
   phone is just for logging them.

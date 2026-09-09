@@ -24,6 +24,8 @@ const state = {
   saving: false,
   dirty: false,
   adding: false,
+  filterOpen: false,
+  projectFilter: null, // project name, or null
   undo: null, // { text, label }
   toastMsg: null,
   _preEdit: null,
@@ -225,6 +227,7 @@ function addTask(raw) {
     const it = P.parse(`- [ ] ${line}`).items[0];
     if (!it.sched && !it.due && state.view === "today") it.sched = todayISO();
     // inbox / habits → leave undated
+    if (!it.projects.length && state.projectFilter) it.projects = [state.projectFilter];
     if (!it.created) it.created = todayISO();
     const items = state.model.items;
     const firstDone = items.findIndex((x) => x.done && x.depth === 0);
@@ -251,14 +254,44 @@ function matches(it, view, t) {
   return false;
 }
 
-function rootsFor(view) {
+function anyDesc(it, pred) {
+  return pred(it) || (it.children || []).some((c) => anyDesc(c, pred));
+}
+
+function rootsFor(view, ignoreFilter) {
   const t = todayISO();
-  return P.buildTrees(state.model.items).filter((r) => !r.done && matches(r, view, t));
+  const pf = ignoreFilter ? null : state.projectFilter;
+  return P.buildTrees(state.model.items).filter(
+    (r) => !r.done && matches(r, view, t) && (!pf || anyDesc(r, (x) => x.projects.includes(pf)))
+  );
 }
 
 function countFor(view) {
   if (view === "habits") return activeHabits().filter((h) => (h._thisWeek || 0) < (h._goal || 0)).length;
-  return rootsFor(view).length;
+  return rootsFor(view, true).length; // tab counts ignore the project filter
+}
+
+// project list for the filter — item tags + `## Projects` entries, in the
+// explicit order, minus habit names (mirrors the desktop sidebar)
+function allProjects() {
+  const s = new Set();
+  for (const it of state.model.items) for (const p of it.projects) s.add(p);
+  for (const p of state.model.projects || []) s.add(p.name);
+  for (const h of state.model.habits || []) s.delete(h.name);
+  const ord = state.model.projectOrder || [];
+  const pos = (n) => {
+    const i = ord.indexOf(n);
+    return i < 0 ? 1e6 : i;
+  };
+  return [...s].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
+}
+
+function projColor(name) {
+  const e = (state.model.projects || []).find((p) => p.name === name);
+  if (e && e.color) return e.color;
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h} 50% 58%)`;
 }
 
 function relDay(isoStr) {
@@ -310,6 +343,49 @@ function render() {
   else if (state.toastMsg) app.append(toastEl(state.toastMsg));
 
   if (state.adding) app.append(addSheetEl());
+  if (state.filterOpen) app.append(filterSheetEl());
+}
+
+function filterSheetEl() {
+  const wrap = document.createElement("div");
+  wrap.className = "sheet-wrap";
+  wrap.onclick = (e) => {
+    if (e.target === wrap) {
+      state.filterOpen = false;
+      render();
+    }
+  };
+  const sheet = document.createElement("div");
+  sheet.className = "sheet";
+  const h = document.createElement("h2");
+  h.textContent = "Filter by project";
+  sheet.append(h);
+
+  const pick = (name) => {
+    state.projectFilter = name;
+    state.filterOpen = false;
+    render();
+  };
+
+  const all = document.createElement("button");
+  all.className = "projrow" + (state.projectFilter ? "" : " on");
+  all.textContent = "All tasks";
+  all.onclick = () => pick(null);
+  sheet.append(all);
+
+  for (const name of allProjects()) {
+    const row = document.createElement("button");
+    row.className = "projrow" + (state.projectFilter === name ? " on" : "");
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = projColor(name);
+    row.append(dot, document.createTextNode(name));
+    row.onclick = () => pick(name);
+    sheet.append(row);
+  }
+
+  wrap.append(sheet);
+  return wrap;
 }
 
 function topEl() {
@@ -334,13 +410,40 @@ function topEl() {
 
   const status = document.createElement("div");
   status.className = "statusline";
+  const sync = document.createElement("span");
   if (state.saving || state.dirty) {
     const d = document.createElement("span");
     d.className = "dotpulse";
-    status.append(d);
-    status.append(document.createTextNode(state.offline ? "waiting to sync" : "saving…"));
+    sync.append(d);
+    sync.append(document.createTextNode(state.offline ? "waiting to sync" : "saving…"));
   } else if (!state.offline) {
-    status.append(document.createTextNode("synced"));
+    sync.textContent = "synced";
+  }
+  status.append(sync);
+
+  if (state.view !== "habits") {
+    if (state.projectFilter) {
+      const chip = document.createElement("button");
+      chip.className = "filterchip";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = projColor(state.projectFilter);
+      chip.append(dot, document.createTextNode(state.projectFilter + "  ✕"));
+      chip.onclick = () => {
+        state.projectFilter = null;
+        render();
+      };
+      status.append(chip);
+    } else {
+      const fbtn = document.createElement("button");
+      fbtn.className = "filterbtn";
+      fbtn.textContent = "⚑ filter";
+      fbtn.onclick = () => {
+        state.filterOpen = true;
+        render();
+      };
+      status.append(fbtn);
+    }
   }
   top.append(status);
 
@@ -366,7 +469,11 @@ function paintList(main) {
   if (!roots.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.textContent = state.view === "today" ? "Nothing due today. 🎉" : "Inbox is empty.";
+    e.textContent = state.projectFilter
+      ? `Nothing in +${state.projectFilter} ${state.view === "today" ? "due today" : "here"}.`
+      : state.view === "today"
+        ? "Nothing due today. 🎉"
+        : "Inbox is empty.";
     main.append(e);
     return;
   }

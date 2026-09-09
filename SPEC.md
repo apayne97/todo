@@ -432,10 +432,17 @@ Today / Inbox rows:
   **Pick day** (native `<input type=date>`).
 - **+** (FAB, hidden on the Habits tab) → one text field, run through `parse` +
   `parseDateInput` exactly like desktop `a` (`buy milk +life due:friday`). Today
-  tab → dated today, Inbox → undated.
+  tab → dated today, Inbox → undated. A task added while a project filter is
+  active is tagged with that project.
 
 Today splits **overdue** above **today** when both exist. Views filter on
 effective dates (a subtask stays with its parent). Blocked items are hidden.
+
+**Project filter** — a `⚑ filter` control in the top bar opens a sheet listing
+`allProjects()` (+ "All tasks"). Picking one filters Today and Inbox to tasks in
+that project (`anyDesc` on `+tag`); an active-filter chip with `✕` replaces the
+button. Tab counts stay unfiltered. The Habits tab ignores it (no filter UI
+there). `projColor` / `allProjects` are ported into `mobile.js`.
 
 **Habits tab** — one card per non-archived habit: `X / Y this week` + bar, current
 streak / best, an 8-week sparkline, and a big **log a rep** button (appends
@@ -444,9 +451,9 @@ and the button to "done this week — log another". No creating / editing /
 archiving on mobile — that's desktop. Reuses `computeHabitStats`.
 
 **Not on mobile:** an Upcoming list (dropped for Habits — snooze + Today cover
-it), projects, dependencies, habit setup, bulk add, reordering, date editing
-beyond snooze, the Done graph, keyboard shortcuts. (v2: project filter as a 3×3
-grid; swipe `[`/`]`; maybe Upcoming back as a swipe.)
+it; not coming back), dependencies, habit setup, bulk add, reordering, date
+editing beyond snooze, the Done graph, keyboard shortcuts. (Later: swipe `[`/`]`
+for snooze — deferred, it fights vertical scroll + the iOS edge gesture.)
 
 **Offline.** The last `/todos` response is kept in `localStorage` and rendered on
 a cold open before the network answers (or when it doesn't). A persistent banner
