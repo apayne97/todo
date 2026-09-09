@@ -1,7 +1,7 @@
 // Mobile PWA shell cache. Only the static shell is cached — /todos, /config and
 // /login always go to the network (the app has its own localStorage fallback for
 // offline reads). Bump CACHE to force a shell refresh after deploying changes.
-const CACHE = "todo-mobile-v1";
+const CACHE = "todo-mobile-v2";
 const SHELL = [
   "/m",
   "/mobile.html",
@@ -9,7 +9,7 @@ const SHELL = [
   "/mobile.js",
   "/parse.js",
   "/mobile.webmanifest",
-  "/icon.svg",
+  "/icon-m.svg",
 ];
 
 self.addEventListener("install", (e) => {

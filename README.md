@@ -65,7 +65,10 @@ squeezed onto a phone. Three tabs (**Today / Habits / Inbox**):
 Everything heavier — projects, dependencies, habit setup, bulk edit, reordering,
 an Upcoming list — stays on the desktop app.
 
-It's a PWA: *Add to Home Screen* gives it its own icon and window. The last
+It's a PWA installed separately from the desktop app: open **`/m`** in Safari →
+*Share* → *Add to Home Screen*. It gets its own standalone window and a distinct
+green-check icon named **todo·m** (the desktop install is the blue-check "todo"),
+so both can live on the home screen without confusion. The last
 loaded list is kept in `localStorage`, so reopening it shows that immediately
 while the fresh copy loads; when a request fails it says "offline" and holds your
 change until the connection's back. The service worker that caches the app shell
