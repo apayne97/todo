@@ -18,10 +18,15 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 
 - **Ground truth:** `todos.md` in this repo (`~/life/todo`). Overflow archive (later): `todos-archive.md`.
 - **App:** single static `index.html` + `app.js` + `app.css`, no build step.
-- **Server:** ~30-line Node script (`server.mjs`, stdlib `http` only, zero deps).
+  Mobile is a separate front-end (`mobile.html` + `mobile.js` + `mobile.css`,
+  served at `/m`) — see **Mobile** below. Both share `parse.js`.
+- **Server:** Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag
   - `GET`/`PUT /config` → `todo.config.json` (UI prefs — key bindings; gitignored)
+  - `GET /` desktop app · `GET /m` mobile app
+  - `TODO_PASSWORD` (env) → if set, `/todos` and `/config` require a signed cookie
+    from `/login`; static assets and `/capture` stay open. Unset → no auth.
   - `POST /capture` → `{ title, url?, due?, note? }`, appends one task tagged
     `+industry-job-application` to the top of the active list. CORS-open (`Access-
     Control-Allow-Origin: *`) so the [job-posting bookmarklet](bookmarklet.js),
@@ -404,6 +409,46 @@ section, bump-chip colours, both recurrence kinds, subtask progress, a blocking
 chain, a "ready" item, a broken ref, a cycle, notes, links) and the Done section
 is dated across recent days to populate the graph.
 
+## Mobile (`/m`)
+
+A separate, deliberately small touch front-end — `mobile.html` / `mobile.js` /
+`mobile.css`, served at `/m`, its own `mobile.webmanifest` (`start_url: /m`,
+standalone). Shares `parse.js` and the `/todos` API with the desktop app; the
+desktop app is untouched.
+
+**Scope.** Three tabs — **Today / Upcoming / Inbox** (counts in the tab). Per row:
+
+- Tap the circle → complete. Recurring rolls forward via the same `toggleDone`.
+  A 6-second **Undo** toast (one level, snapshot-based).
+- Tap the row → expand: notes, a link button, checkable subtasks (parent shows an
+  `n/m` pill), and a snooze row — **Tomorrow**, **Next week** (`nextMonday`),
+  **Pick day** (native `<input type=date>`).
+- **+** (FAB) → one text field, run through `parse` + `parseDateInput` exactly
+  like desktop `a` (`buy milk +life due:friday`). Lands with the tab's date
+  context (Today → today, Upcoming → tomorrow, Inbox → undated).
+
+Today splits **overdue** above **today** when both exist. Upcoming groups by day.
+Views filter on effective dates (a subtask stays with its parent). Blocked items
+are hidden (they belong to the desktop's Blocked view).
+
+**Not on mobile:** projects, dependencies, habits, bulk add, reordering, date
+editing beyond snooze, the Done graph, keyboard shortcuts. (v2: project filter as
+a 3×3 grid; swipe `[`/`]`.)
+
+**Offline.** The last `/todos` response is kept in `localStorage` and rendered on
+a cold open before the network answers (or when it doesn't). A persistent banner
+shows the offline state; a pending edit stays queued (the row stays `dirty`) and
+flushes on the next successful poll / `online` event. `mobile-sw.js` precaches
+the app shell for a fully offline cold start — but a service worker only
+registers in a **secure context** (`https://` or `localhost`), so over plain
+`http://<host>:4444` it silently no-ops and the shell needs the server reachable
+to load. `tailscale serve` (auto HTTPS for the `*.ts.net` name) unlocks it.
+`/todos` is never SW-cached regardless.
+
+**Auth.** On a `401` from `/todos` the app redirects to `/login?next=/m`; after
+sign-in the year-long cookie carries it. See the server's `TODO_PASSWORD` gate.
+
 ## Out of scope (v1)
 
-Multi-user/sync · mobile-optimized UI · time-of-day scheduling · rich-text notes.
+Multi-user/sync · time-of-day scheduling · rich-text notes · editing dependencies
+or projects from mobile.

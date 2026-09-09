@@ -1,0 +1,43 @@
+# systemd unit for the always-on Linux box (the ThinkPad / Lubuntu).
+#
+# Setup:
+#   sudo apt install nodejs git           # Node 18+  (check: node -v)
+#   git clone git@github.com:apayne97/todo.git ~/todo
+#   mkdir -p ~/.config/systemd/user
+#   cp ~/todo/deploy/todo.service ~/.config/systemd/user/todo.service
+#   #  -> edit WorkingDirectory below if you cloned elsewhere, and set a password
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now todo.service
+#   loginctl enable-linger $USER          # keep it running when you're logged out
+#
+# Password gate (needed once this is reachable from your phone / Tailscale):
+#   systemctl --user edit todo.service    # add, in the [Service] section:
+#     Environment=TODO_PASSWORD=your-passphrase-here
+#   systemctl --user restart todo.service
+#
+# Restart after `git pull`:  systemctl --user restart todo.service
+# Logs:                      journalctl --user -u todo.service -f
+#
+# Phone access: install Tailscale on the box and your phone, same account. Then
+# either hit http://<box>.<tailnet>.ts.net:4444/m directly, or — to get HTTPS so
+# the PWA's offline service worker works — run:
+#     tailscale serve --bg 4444
+#   and open https://<box>.<tailnet>.ts.net/m instead.
+
+[Unit]
+Description=todo app server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/todo
+ExecStart=/usr/bin/node server.mjs
+Restart=always
+RestartSec=3
+Environment=TODO_PORT=4444
+Environment=TODO_AUTOPUSH=1
+# Environment=TODO_PASSWORD=set-me-once-this-is-reachable-from-outside
+
+[Install]
+WantedBy=default.target

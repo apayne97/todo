@@ -12,13 +12,18 @@
 //   TODO_AUTOPUSH       also push after committing, rebasing onto any concurrent
 //                       push first. ON by default; set TODO_AUTOPUSH=0 to keep
 //                       commits local. (Disabling autocommit disables push too.)
+//   TODO_PASSWORD       if set, gate /todos and /config behind a password (a
+//                       signed cookie via /login). Unset = no auth. Set it once
+//                       the server is reachable from outside localhost/LAN.
 //
 // API:
 //   GET  /todos    -> { text, etag }        etag is the file mtime
 //   PUT  /todos    body { text, etag }      412 if etag is stale, else writes atomically
+//   GET/PUT /config                         UI prefs (key bindings); gated with /todos
 //   POST /capture  body { title, url?, due?, note? }   appends one task (see below);
 //                  CORS-open so the browser-extension/bookmarklet can call it from
 //                  any origin — it can only ever add a line to todos.md, nothing else.
+//   GET  /         desktop app   ·   GET /m   mobile app
 // Everything else is served as a static file from this directory.
 
 import { createServer } from "node:http";
@@ -26,6 +31,7 @@ import { readFile, writeFile, rename, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, extname, normalize } from "node:path";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import * as P from "./parse.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -44,6 +50,63 @@ const CONFIG = resolve(HERE, "todo.config.json");
 // on one machine. Opt out with TODO_AUTOCOMMIT=0 (all local) or TODO_AUTOPUSH=0.
 const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT !== "0";
 const AUTOPUSH = AUTOCOMMIT && process.env.TODO_AUTOPUSH !== "0";
+
+// Optional password gate. TODO_PASSWORD unset -> no auth (localhost / same-LAN
+// use is unchanged). Set it once the server is reachable from outside (Tailscale,
+// the always-on Linux box, a port-forward). A correct password sets a long-lived
+// signed cookie; only the data endpoints are gated, static assets stay open so
+// the login page can load. /capture stays open regardless — it can only ever
+// append one task, and the deployment is assumed to sit behind Tailscale/LAN.
+const PASSWORD = process.env.TODO_PASSWORD || "";
+const AUTH = PASSWORD.length > 0;
+const SESSION = AUTH ? createHmac("sha256", PASSWORD).update("todo-session-v1").digest("hex") : "";
+
+function cookies(req) {
+  const out = {};
+  for (const part of (req.headers.cookie || "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+function authed(req) {
+  if (!AUTH) return true;
+  const tok = cookies(req).todo_session || "";
+  if (tok.length !== SESSION.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(tok), Buffer.from(SESSION));
+  } catch {
+    return false;
+  }
+}
+
+function sessionCookie(req) {
+  const secure = req.headers["x-forwarded-proto"] === "https" || req.socket.encrypted ? "; Secure" : "";
+  return `todo_session=${SESSION}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${secure}`;
+}
+
+const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+const LOGIN_HTML = (err, next) => `<!doctype html><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>todo · sign in</title>
+<style>
+  body{background:#14161a;color:#d9dee7;font:15px/1.5 ui-monospace,Menlo,monospace;
+    display:grid;place-items:center;min-height:100vh;margin:0}
+  form{display:grid;gap:12px;width:min(320px,80vw)}
+  h1{font-size:16px;font-weight:600;margin:0 0 4px}
+  input{font:inherit;padding:12px;border-radius:8px;border:1px solid #2c313b;
+    background:#1b1e24;color:#d9dee7}
+  button{font:inherit;padding:12px;border-radius:8px;border:0;
+    background:#6ea8fe;color:#0b1220;font-weight:600;cursor:pointer}
+  .err{color:#ff7a7a;font-size:13px;min-height:1em}
+</style>
+<form method=POST action="/login?next=${encodeURIComponent(next && next.startsWith("/") ? next : "/")}">
+  <h1>todo</h1>
+  <div class=err>${err ? "wrong password" : ""}</div>
+  <input type=password name=password placeholder=password autofocus autocomplete=current-password>
+  <button>sign in</button>
+</form>`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -122,6 +185,43 @@ function readBody(req) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === "/login") {
+    if (!AUTH) return send(res, 302, "", { Location: "/" });
+    const next = url.searchParams.get("next") || "/";
+    if (req.method === "GET") {
+      return send(res, 200, LOGIN_HTML(url.searchParams.get("err"), next), { "Content-Type": MIME[".html"] });
+    }
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      let pw = "";
+      const ct = req.headers["content-type"] || "";
+      if (ct.includes("application/json")) {
+        try { pw = String(JSON.parse(body).password || ""); } catch {}
+      } else {
+        pw = new URLSearchParams(body).get("password") || "";
+      }
+      const ok =
+        pw.length === PASSWORD.length &&
+        (() => { try { return timingSafeEqual(Buffer.from(pw), Buffer.from(PASSWORD)); } catch { return false; } })();
+      const dest = next.startsWith("/") ? next : "/";
+      if (!ok) return send(res, 303, "", { Location: "/login?err=1&next=" + encodeURIComponent(dest) });
+      return send(res, 303, "", { Location: dest, "Set-Cookie": sessionCookie(req) });
+    }
+    return send(res, 405, "method not allowed");
+  }
+
+  if (url.pathname === "/logout") {
+    return send(res, 303, "", {
+      Location: "/login",
+      "Set-Cookie": "todo_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    });
+  }
+
+  // gate the data endpoints (not static assets, not /capture)
+  if (AUTH && !authed(req) && ["/todos", "/config"].includes(url.pathname)) {
+    return send(res, 401, JSON.stringify({ error: "auth" }), { "Content-Type": MIME[".json"] });
+  }
 
   if (url.pathname === "/todos") {
     if (req.method === "GET") {
@@ -236,6 +336,7 @@ const server = createServer(async (req, res) => {
   // static files
   let rel = decodeURIComponent(url.pathname);
   if (rel === "/") rel = "/index.html";
+  if (rel === "/m" || rel === "/m/") rel = "/mobile.html";
   const path = join(HERE, normalize(rel));
   if (!path.startsWith(HERE)) return send(res, 403, "no");
   try {
@@ -254,6 +355,7 @@ server.listen(PORT, () => {
       AUTOPUSH ? "on + push" : AUTOCOMMIT ? "on (local; TODO_AUTOPUSH=0 set)" : "off (TODO_AUTOCOMMIT=0 set)"
     }`
   );
+  console.log(`auth       ${AUTH ? "on (TODO_PASSWORD set)" : "off — open to anyone who can reach this port"}`);
 });
 
 // flush pending edits on the way out

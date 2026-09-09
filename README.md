@@ -13,12 +13,15 @@ cd ~/life/todo && npm start
 Then open <http://localhost:4444>.
 
 **Always-on (and phone access):** [`deploy/com.apayne.todo.plist`](deploy/com.apayne.todo.plist)
-is a launchd agent that keeps the server running whenever you're logged in.
-Install per the comment at the top of that file. With Tailscale, the phone
-reaches it at `http://<mac-name>:4444` from anywhere; add to the home screen for
-an app-like shell. The `pantheon` `preview_start todo` config just attaches to
-the running server. **Run it on every machine you edit from** — otherwise edits
-made there sit unpushed (`cd ~/life/todo && git push` to recover them).
+is a launchd agent that keeps the server running whenever you're logged in
+(macOS); [`deploy/todo.service`](deploy/todo.service) is the systemd equivalent
+for an always-on Linux box. Install per the comment at the top of the file. With
+Tailscale the phone reaches it at `http://<host>:4444/m` from anywhere; add to
+the home screen for an app-like shell. The `pantheon` `preview_start todo` config
+just attaches to the running server. **Run it on every machine you edit from** —
+otherwise edits made there sit unpushed (`cd ~/life/todo && git push` to recover
+them). For a phone you actually rely on, run it on a box that's always up (the
+Linux server) rather than a laptop that sleeps.
 
 **Open it as a real app (no more fishing through Chrome tabs):** the page ships a
 web manifest + icon, so it's installable as a standalone window.
@@ -30,7 +33,34 @@ web manifest + icon, so it's installable as a standalone window.
 - **Global hotkey:** Shortcuts.app → new shortcut → *Open App* → the installed
   "todo" app → assign a keyboard shortcut in the shortcut's info panel. One chord
   focuses-or-opens the single window from anywhere.
-- **iPhone:** Safari → Share → *Add to Home Screen*.
+- **iPhone:** open **`/m`** (the mobile app — see below), Safari → Share → *Add
+  to Home Screen*.
+
+## Mobile app (`/m`)
+
+`http://<host>:4444/m` is a separate, touch-first front-end — not the desktop app
+squeezed onto a phone. Three tabs (**Today / Upcoming / Inbox**), and that's the
+whole surface: tap the circle to complete (recurring rolls forward, with a 6s
+**Undo**), tap a row to expand its note / link / subtasks and a snooze row
+(**Tomorrow · Next week · Pick day**), and a **+** button to add one task through
+the same parser as desktop `a` (`buy milk +life due:friday` works). Everything
+heavier — projects, dependencies, habits, bulk edit, reordering — stays on the
+desktop app.
+
+It's a PWA: *Add to Home Screen* gives it its own icon and window. The last
+loaded list is kept in `localStorage`, so reopening it shows that immediately
+while the fresh copy loads; when a request fails it says "offline" and holds your
+change until the connection's back. The service worker that caches the app shell
+for a true cold-start-offline needs a **secure context** — `https://` or
+`localhost` — so it only kicks in if you reach the server over HTTPS (e.g.
+`tailscale serve` in front of port 4444, which mints a cert for the `*.ts.net`
+name). Over plain `http://<host>:4444` the app still works, it just needs the
+server reachable to start.
+
+**Auth.** Set `TODO_PASSWORD` in the environment and every data request needs a
+password (entered once at `/login`, then a year-long cookie). Unset = no auth
+(fine for localhost / same-LAN). Turn it on before the server is reachable from
+outside your network. The desktop app respects the same gate with no changes.
 
 **Autosave to git — on by default.** The server commits `todos.md` ~8s after the
 last edit and pushes. A burst of edits (checking off three things, adding two)

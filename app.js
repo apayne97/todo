@@ -234,6 +234,7 @@ async function load() {
     return;
   }
   const r = await fetch(API);
+  if (r.status === 401) return void (location.href = "/login?next=" + encodeURIComponent(location.pathname));
   const { text, etag } = await r.json();
   state.model = P.parse(text);
   state.etag = etag;
@@ -268,6 +269,10 @@ async function save() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, etag: state.etag }),
     });
+    if (r.status === 401) {
+      location.href = "/login?next=" + encodeURIComponent(location.pathname);
+      return;
+    }
     const j = await r.json();
     if (r.status === 412) {
       state.etag = j.etag;
