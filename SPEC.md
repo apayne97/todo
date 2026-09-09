@@ -420,24 +420,33 @@ A separate, deliberately small touch front-end — `mobile.html` / `mobile.js` /
 standalone). Shares `parse.js` and the `/todos` API with the desktop app; the
 desktop app is untouched.
 
-**Scope.** Three tabs — **Today / Upcoming / Inbox** (counts in the tab). Per row:
+**Scope.** Three tabs — **Today / Habits / Inbox** (counts in the tab; the Habits
+count is habits *behind* their weekly goal).
+
+Today / Inbox rows:
 
 - Tap the circle → complete. Recurring rolls forward via the same `toggleDone`.
   A 6-second **Undo** toast (one level, snapshot-based).
 - Tap the row → expand: notes, a link button, checkable subtasks (parent shows an
   `n/m` pill), and a snooze row — **Tomorrow**, **Next week** (`nextMonday`),
   **Pick day** (native `<input type=date>`).
-- **+** (FAB) → one text field, run through `parse` + `parseDateInput` exactly
-  like desktop `a` (`buy milk +life due:friday`). Lands with the tab's date
-  context (Today → today, Upcoming → tomorrow, Inbox → undated).
+- **+** (FAB, hidden on the Habits tab) → one text field, run through `parse` +
+  `parseDateInput` exactly like desktop `a` (`buy milk +life due:friday`). Today
+  tab → dated today, Inbox → undated.
 
-Today splits **overdue** above **today** when both exist. Upcoming groups by day.
-Views filter on effective dates (a subtask stays with its parent). Blocked items
-are hidden (they belong to the desktop's Blocked view).
+Today splits **overdue** above **today** when both exist. Views filter on
+effective dates (a subtask stays with its parent). Blocked items are hidden.
 
-**Not on mobile:** projects, dependencies, habits, bulk add, reordering, date
-editing beyond snooze, the Done graph, keyboard shortcuts. (v2: project filter as
-a 3×3 grid; swipe `[`/`]`.)
+**Habits tab** — one card per non-archived habit: `X / Y this week` + bar, current
+streak / best, an 8-week sparkline, and a big **log a rep** button (appends
+`- [x] <name> +<name> done:<today>`, with Undo). A met week turns the card green
+and the button to "done this week — log another". No creating / editing /
+archiving on mobile — that's desktop. Reuses `computeHabitStats`.
+
+**Not on mobile:** an Upcoming list (dropped for Habits — snooze + Today cover
+it), projects, dependencies, habit setup, bulk add, reordering, date editing
+beyond snooze, the Done graph, keyboard shortcuts. (v2: project filter as a 3×3
+grid; swipe `[`/`]`; maybe Upcoming back as a swipe.)
 
 **Offline.** The last `/todos` response is kept in `localStorage` and rendered on
 a cold open before the network answers (or when it doesn't). A persistent banner

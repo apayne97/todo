@@ -309,6 +309,114 @@ main {
   overflow: hidden;
 }
 
+/* ---------- habits ---------- */
+
+.card.habit {
+  padding: 14px;
+}
+
+.card.habit.met {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+}
+
+.hhead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hname {
+  font-size: 17px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+}
+
+.hcount {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+}
+
+.card.habit.met .hcount {
+  color: var(--good);
+}
+
+.hbar {
+  margin-top: 10px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel2);
+  overflow: hidden;
+}
+
+.hbar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.hbar span.met {
+  background: var(--good);
+}
+
+.hsub {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.hspark {
+  margin-top: 10px;
+  display: flex;
+  gap: 4px;
+}
+
+.hspark .hcell {
+  flex: 1;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+}
+
+.hspark .hcell.partial {
+  background: color-mix(in srgb, var(--accent) 35%, var(--panel2));
+}
+
+.hspark .hcell.hit {
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.hspark .hcell.cur {
+  outline: 1px solid var(--dim);
+  outline-offset: 1px;
+}
+
+.hlog {
+  margin-top: 14px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #0b1220;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.hlog:active {
+  filter: brightness(0.92);
+}
+
+.card.habit.met .hlog {
+  background: var(--panel2);
+  color: var(--dim);
+}
+
 /* ---------- add ---------- */
 
 .fab {

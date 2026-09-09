@@ -51,13 +51,18 @@ web manifest + icon, so it's installable as a standalone window.
 ## Mobile app (`/m`)
 
 `http://<host>:4444/m` is a separate, touch-first front-end — not the desktop app
-squeezed onto a phone. Three tabs (**Today / Upcoming / Inbox**), and that's the
-whole surface: tap the circle to complete (recurring rolls forward, with a 6s
-**Undo**), tap a row to expand its note / link / subtasks and a snooze row
-(**Tomorrow · Next week · Pick day**), and a **+** button to add one task through
-the same parser as desktop `a` (`buy milk +life due:friday` works). Everything
-heavier — projects, dependencies, habits, bulk edit, reordering — stays on the
-desktop app.
+squeezed onto a phone. Three tabs (**Today / Habits / Inbox**):
+
+- **Today / Inbox:** tap the circle to complete (recurring rolls forward, with a
+  6s **Undo**), tap a row to expand its note / link / subtasks and a snooze row
+  (**Tomorrow · Next week · Pick day**), **+** to add one task through the same
+  parser as desktop `a` (`buy milk +life due:friday`).
+- **Habits:** a card per habit — `X / Y this week`, streak / best, 8-week
+  sparkline, and a big **log a rep** button. Set habits up on the desktop; the
+  phone is just for logging them.
+
+Everything heavier — projects, dependencies, habit setup, bulk edit, reordering,
+an Upcoming list — stays on the desktop app.
 
 It's a PWA: *Add to Home Screen* gives it its own icon and window. The last
 loaded list is kept in `localStorage`, so reopening it shows that immediately

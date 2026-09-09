@@ -10,7 +10,7 @@ const tomorrowISO = () => P.iso(P.addDays(new Date(), 1));
 
 const VIEWS = [
   ["today", "Today"],
-  ["upcoming", "Upcoming"],
+  ["habits", "Habits"],
   ["inbox", "Inbox"],
 ];
 
@@ -37,6 +37,14 @@ const $ = (sel, el = document) => el.querySelector(sel);
 
 function recompute() {
   P.computeStatus(state.model, todayISO());
+  const habits = P.computeHabitStats(state.model, todayISO());
+  let bumped = false;
+  for (const h of habits) if (h._bestChanged) { h.best = h._best; bumped = true; }
+  if (bumped) scheduleSave(); // a new all-time streak — persist it
+}
+
+function activeHabits() {
+  return (state.model.habits || []).filter((h) => !h.archived);
 }
 
 function cacheSnapshot(text, etag) {
@@ -215,11 +223,8 @@ function addTask(raw) {
   line = normalizeDates(line);
   mutate(() => {
     const it = P.parse(`- [ ] ${line}`).items[0];
-    if (!it.sched && !it.due) {
-      if (state.view === "today") it.sched = todayISO();
-      else if (state.view === "upcoming") it.sched = tomorrowISO();
-      // inbox → leave undated
-    }
+    if (!it.sched && !it.due && state.view === "today") it.sched = todayISO();
+    // inbox / habits → leave undated
     if (!it.created) it.created = todayISO();
     const items = state.model.items;
     const firstDone = items.findIndex((x) => x.done && x.depth === 0);
@@ -242,7 +247,6 @@ function matches(it, view, t) {
   if (it.done) return false;
   const fd = firstDate(it);
   if (view === "today") return !it.isBlocked && !!fd && fd <= t;
-  if (view === "upcoming") return !it.isBlocked && !!fd && fd > t;
   if (view === "inbox") return !it.isBlocked && !it.sched && !it.due && !it._effSched && !it._effDue;
   return false;
 }
@@ -253,6 +257,7 @@ function rootsFor(view) {
 }
 
 function countFor(view) {
+  if (view === "habits") return activeHabits().filter((h) => (h._thisWeek || 0) < (h._goal || 0)).length;
   return rootsFor(view).length;
 }
 
@@ -289,15 +294,17 @@ function render() {
   paintList(main);
   app.append(main);
 
-  const fab = document.createElement("button");
-  fab.className = "fab";
-  fab.textContent = "+";
-  fab.setAttribute("aria-label", "add task");
-  fab.onclick = () => {
-    state.adding = true;
-    render();
-  };
-  app.append(fab);
+  if (state.view !== "habits") {
+    const fab = document.createElement("button");
+    fab.className = "fab";
+    fab.textContent = "+";
+    fab.setAttribute("aria-label", "add task");
+    fab.onclick = () => {
+      state.adding = true;
+      render();
+    };
+    app.append(fab);
+  }
 
   if (state.undo) app.append(toastEl(state.undo.label, "Undo", doUndo));
   else if (state.toastMsg) app.append(toastEl(state.toastMsg));
@@ -351,17 +358,15 @@ function topEl() {
 
 function paintList(main) {
   const t = todayISO();
+
+  if (state.view === "habits") return paintHabits(main);
+
   const roots = rootsFor(state.view);
 
   if (!roots.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.textContent =
-      state.view === "today"
-        ? "Nothing due today. 🎉"
-        : state.view === "upcoming"
-          ? "Nothing coming up."
-          : "Inbox is empty.";
+    e.textContent = state.view === "today" ? "Nothing due today. 🎉" : "Inbox is empty.";
     main.append(e);
     return;
   }
@@ -380,28 +385,83 @@ function paintList(main) {
     return;
   }
 
-  if (state.view === "upcoming") {
-    let lastKey = null;
-    for (const r of roots.slice().sort((a, b) => (firstDate(a) || "").localeCompare(firstDate(b) || ""))) {
-      const key = firstDate(r);
-      if (key !== lastKey) {
-        main.append(sechead(relDayLong(key)));
-        lastKey = key;
-      }
-      main.append(cardEl(r));
-    }
-    return;
-  }
-
   roots.forEach((r) => main.append(cardEl(r)));
 }
 
-function relDayLong(isoStr) {
-  const d = P.parseISO(isoStr);
-  const n = Math.round((d - P.parseISO(todayISO())) / 86400000);
-  if (n === 1) return "tomorrow";
-  if (n < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+// ---------- habits ----------
+
+function paintHabits(main) {
+  const habits = activeHabits();
+  if (!habits.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No habits. Set them up on the desktop app.";
+    main.append(e);
+    return;
+  }
+  for (const h of habits) main.append(habitCardEl(h));
+}
+
+function habitCardEl(h) {
+  const goal = h._goal || 0;
+  const done = h._thisWeek || 0;
+  const met = goal > 0 && done >= goal;
+
+  const card = document.createElement("div");
+  card.className = "card habit" + (met ? " met" : "");
+
+  const head = document.createElement("div");
+  head.className = "hhead";
+  const name = document.createElement("span");
+  name.className = "hname";
+  name.textContent = h.name;
+  head.append(name);
+  const count = document.createElement("span");
+  count.className = "hcount";
+  count.textContent = goal ? `${done} / ${goal}` : `${done}`;
+  head.append(count);
+  card.append(head);
+
+  if (goal) {
+    const bar = document.createElement("div");
+    bar.className = "hbar";
+    const fill = document.createElement("span");
+    fill.style.width = Math.min(100, Math.round((done / goal) * 100)) + "%";
+    if (met) fill.classList.add("met");
+    bar.append(fill);
+    card.append(bar);
+  }
+
+  const streak = document.createElement("div");
+  streak.className = "hsub";
+  streak.textContent = `streak ${h._streak || 0}w · best ${h._best || 0}w`;
+  card.append(streak);
+
+  const spark = document.createElement("div");
+  spark.className = "hspark";
+  for (const wk of h._spark || []) {
+    const c = document.createElement("span");
+    c.className = "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : "");
+    spark.append(c);
+  }
+  card.append(spark);
+
+  const btn = document.createElement("button");
+  btn.className = "hlog";
+  btn.textContent = met ? "✓ done this week — log another" : "＋ log a rep";
+  btn.onclick = () => logRep(h);
+  card.append(btn);
+
+  return card;
+}
+
+function logRep(h) {
+  const day = todayISO();
+  mutate(() => {
+    const it = P.parse(`- [x] ${h.name} +${h.name} created:${day} done:${day}`).items[0];
+    state.model.items.push(it);
+    P.ensureIds(state.model.items);
+  }, `logged ${h.name} · ${(h._thisWeek || 0) + 1}/${h._goal || "–"} this week`);
 }
 
 function sechead(text) {
@@ -594,12 +654,7 @@ function addSheetEl() {
   const sheet = document.createElement("div");
   sheet.className = "sheet";
   const h = document.createElement("h2");
-  h.textContent =
-    state.view === "today"
-      ? "New task — today"
-      : state.view === "upcoming"
-        ? "New task — tomorrow"
-        : "New task — inbox";
+  h.textContent = state.view === "today" ? "New task — today" : "New task — inbox";
   sheet.append(h);
 
   const input = document.createElement("input");
