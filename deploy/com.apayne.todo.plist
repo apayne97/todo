@@ -15,6 +15,9 @@
   Restart after editing the server:
     launchctl kickstart -k gui/$(id -u)/com.apayne.todo
 
+  Task data is a separate repo — clone it alongside this one:
+    git clone git@github.com:apayne97/todo-data.git ~/life/todo-data
+
   Logs: ~/life/todo/server.log
 -->
 <plist version="1.0">
@@ -33,6 +36,9 @@
 
   <key>EnvironmentVariables</key>
   <dict>
+    <!-- ground truth lives in its own repo (apayne97/todo-data) -->
+    <key>TODO_FILE</key>
+    <string>/Users/apayne/life/todo-data/todos.md</string>
     <key>TODO_AUTOPUSH</key>
     <string>1</string>
     <key>PATH</key>

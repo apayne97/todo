@@ -5,7 +5,10 @@
 //
 // Env:
 //   TODO_PORT           override port (default 4444)
-//   TODO_FILE           path to the markdown ground truth (default ./todos.md)
+//   TODO_FILE           path to the markdown ground truth (default ./todos.md).
+//                       The data lives in its own repo — point this at a checkout
+//                       of it (e.g. ~/life/todo-data/todos.md); autosave commits
+//                       *that* repo, not the app code.
 //   TODO_AUTOCOMMIT     git-commit todos.md ~8s after the last edit (a burst of
 //                       edits becomes one "todo: autosave <date> <time>" commit).
 //                       ON by default; set TODO_AUTOCOMMIT=0 to disable.
@@ -139,11 +142,13 @@ let committing = false;
 let commitTimer = null;
 
 // Debounced (see scheduleCommit): a burst of edits collapses into one commit.
+// Operates on whichever git repo holds todos.md — which is its own repo once the
+// data is split out from the app code (TODO_FILE points into that checkout).
 async function autosave() {
   if (committing) return scheduleCommit();
   committing = true;
   try {
-    const repo = await run("git", ["rev-parse", "--show-toplevel"], { cwd: HERE });
+    const repo = await run("git", ["rev-parse", "--show-toplevel"], { cwd: dirname(FILE) });
     if (repo.err) return;
     const g = (a) => run("git", ["-C", repo.stdout.trim(), ...a.filter((x) => x != null)]);
 

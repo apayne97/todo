@@ -16,7 +16,11 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 
 ## Architecture
 
-- **Ground truth:** `todos.md` in this repo (`~/life/todo`). Overflow archive (later): `todos-archive.md`.
+- **Ground truth:** `todos.md` in its **own repo**, `apayne97/todo-data` (private),
+  cloned at `~/life/todo-data`. Split out from the app repo 2026-09-08 so the
+  autosave churn (dozens of commits/day) stays out of the code history. The
+  server points at it via `TODO_FILE` and autosaves *that* repo. Overflow archive
+  (later): `todos-archive.md` in the same data repo.
 - **App:** single static `index.html` + `app.js` + `app.css`, no build step.
   Mobile is a separate front-end (`mobile.html` + `mobile.js` + `mobile.css`,
   served at `/m`) — see **Mobile** below. Both share `parse.js`.
@@ -32,13 +36,13 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
     Control-Allow-Origin: *`) so the [job-posting bookmarklet](bookmarklet.js),
     running on whatever site the posting lives on, can call it; it can only ever
     add a well-formed line, never overwrite or delete.
-  - auto `git commit` after each successful write (clean history; Claude always
-    sees current state)
+  - auto `git commit` + push of the **data repo** (`dirname(TODO_FILE)`) after
+    each successful write (Claude always sees current state)
 - **Run:** `npm start`, or a `.claude/launch.json` entry so it's one command.
 - **Concurrency:** app re-fetches on window focus + every 10s; stale-ETag PUT
   makes the app reload and replay the pending change.
-- **Sync with Claude:** Claude edits `todos.md` directly; the app picks it up on
-  the next focus/poll.
+- **Sync with Claude:** Claude edits `~/life/todo-data/todos.md` directly; the
+  app picks it up on the next focus/poll.
 
 ## File format
 

@@ -1,16 +1,28 @@
 # todo
 
-A local, keyboard-driven todo app. The ground truth is [`todos.md`](todos.md) — a
-plain Markdown file you can read, edit by hand, port to Notion, or keep forever.
-The app is just a fast view over it. Full design notes in [SPEC.md](SPEC.md).
+A local, keyboard-driven todo app. The ground truth is a plain Markdown file
+(`todos.md`) you can read, edit by hand, port to Notion, or keep forever — the
+app is just a fast view over it. Full design notes in [SPEC.md](SPEC.md).
+
+**The data lives in a separate repo.** `todos.md` is in
+[`apayne97/todo-data`](https://github.com/apayne97/todo-data) (private); the
+server reads/writes it via `TODO_FILE` and autosaves *there*, keeping this repo's
+history to real code changes. Clone it alongside this one:
+
+```bash
+git clone git@github.com:apayne97/todo-data.git ~/life/todo-data
+```
+
+`tutorial.md` here is a self-contained example file for the demo mode.
 
 ## Run
 
 ```bash
-cd ~/life/todo && npm start
+cd ~/life/todo && TODO_FILE=~/life/todo-data/todos.md npm start
 ```
 
-Then open <http://localhost:4444>.
+Then open <http://localhost:4444>. (The launchd/systemd units set `TODO_FILE`
+for you — this is only for a manual run.)
 
 **Always-on (and phone access):** [`deploy/com.apayne.todo.plist`](deploy/com.apayne.todo.plist)
 is a launchd agent that keeps the server running whenever you're logged in
@@ -75,11 +87,14 @@ Storage isn't a concern — git delta-compresses these tiny diffs to almost noth
 
 ## How it works
 
-- The browser app reads and writes `todos.md` through the tiny server in
-  `server.mjs` (Node stdlib only, no dependencies).
-- Claude edits `todos.md` directly; the app reloads it on window focus / every 10s.
+- The browser app reads and writes `todos.md` (in `~/life/todo-data`) through the
+  tiny server in `server.mjs` (Node stdlib only, no dependencies).
+- Claude edits `todos.md` directly in that repo; the app reloads it on window
+  focus / every 10s.
 - Writes are atomic and guarded by an mtime check, so the app and Claude editing
   at the same time can't clobber each other silently.
+- Autosave commits and pushes the **`todo-data`** repo (whichever repo contains
+  the `TODO_FILE`), not this one.
 
 ## The file format
 

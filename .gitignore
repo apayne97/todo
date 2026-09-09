@@ -1,6 +1,12 @@
 node_modules/
 package-lock.json
+
+# The task data lives in its own repo now (apayne97/todo-data); the server
+# reads/writes it via TODO_FILE. Ignored here so a misconfigured server falling
+# back to ./todos.md can't resurrect it in the app repo.
+todos.md
 todos.md.tmp-*
+
 todo.config.json
 todo.config.json.tmp-*
 

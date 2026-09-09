@@ -3,9 +3,10 @@
 # Setup:
 #   sudo apt install nodejs git           # Node 18+  (check: node -v)
 #   git clone git@github.com:apayne97/todo.git ~/todo
+#   git clone git@github.com:apayne97/todo-data.git ~/todo-data   # the task data
 #   mkdir -p ~/.config/systemd/user
 #   cp ~/todo/deploy/todo.service ~/.config/systemd/user/todo.service
-#   #  -> edit WorkingDirectory below if you cloned elsewhere, and set a password
+#   #  -> edit the paths below if you cloned elsewhere, and set a password
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now todo.service
 #   loginctl enable-linger $USER          # keep it running when you're logged out
@@ -36,6 +37,7 @@ ExecStart=/usr/bin/node server.mjs
 Restart=always
 RestartSec=3
 Environment=TODO_PORT=4444
+Environment=TODO_FILE=%h/todo-data/todos.md
 Environment=TODO_AUTOPUSH=1
 # Environment=TODO_PASSWORD=set-me-once-this-is-reachable-from-outside
 
