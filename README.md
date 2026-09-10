@@ -104,6 +104,9 @@ Storage isn't a concern — git delta-compresses these tiny diffs to almost noth
   at the same time can't clobber each other silently.
 - Autosave commits and pushes the **`todo-data`** repo (whichever repo contains
   the `TODO_FILE`), not this one.
+- Desktop and mobile share three DOM-free modules: `parse.js` (read/serialize
+  `todos.md`), `model.js` (view-model helpers), and `dom.js` (the `el()` element
+  builder). `parse.test.mjs` / `model.test.mjs` run under `node --test`.
 
 ## The file format
 
@@ -235,4 +238,5 @@ bookmarklet's `fetch()` calls — see [bookmarklet.js](bookmarklet.js) for the s
 npm test
 ```
 
-Covers the parser round-trip, date math, recurrence, and dependency blocking.
+Covers the parser round-trip, date math, recurrence, dependency blocking, and
+the shared view-model helpers in `model.js`.

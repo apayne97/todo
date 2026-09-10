@@ -27,7 +27,10 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
   `parse.js` (read/serialize `todos.md`, `computeStatus`) and `model.js`
   (view-model helpers — `viewMatch`, `allProjects`, `isReady`, `firstDate`, …).
   Anything DOM-free that both apps need lives in one of those, so it can't drift
-  and it's covered by `parse.test.mjs` / `model.test.mjs` (`npm test`).
+  and it's covered by `parse.test.mjs` / `model.test.mjs` (`npm test`). A third
+  shared module, `dom.js`, is the `el(tag, attrs, ...kids)` builder both
+  front-ends use instead of hand-rolled `createElement` boilerplate (not a
+  framework — no reactivity, `render()` still rebuilds the view).
 - **Server:** Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag
