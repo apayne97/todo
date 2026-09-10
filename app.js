@@ -1627,96 +1627,111 @@ function renderMain() {
   if (state._focusEl) state._focusEl.focus();
 }
 
-function render() {
-  const app = $("#app");
-  RENDERING = true; // tearing down the DOM blurs the edit input — don't treat that as a commit
-  app.innerHTML = "";
-  state._focusEl = null;
+// one sidebar/nav button: `key` badge + label (+ optional colour dot / count)
+function navBtn({ cls, active, key, label, dot, count, title, onclick }) {
+  return el(
+    "button",
+    { class: "navbtn" + (cls ? " " + cls : "") + (active ? " on" : ""), title, onclick },
+    el("span", { class: "nk" }, key || ""),
+    dot && el("span", { class: "dot", style: { background: dot } }),
+    cls === "tiny" ? el("span", { class: "plabel" }, label) : label,
+    count ? el("span", { class: "nc" }, ` ${count}`) : null
+  );
+}
 
-  const side = document.createElement("nav");
-  side.className = "side";
+function renderSidebar() {
+  const side = el("nav", { class: "side" });
+
   VIEWS.forEach(([k, label], i) => {
-    const b = document.createElement("button");
-    b.className = "navbtn" + (state.view === k ? " on" : "");
-    let count = "";
+    let count = 0;
     if (!NO_COUNT.includes(k)) {
-      const n = P.buildTrees(state.model.items).filter((r) => anyDesc(r, (x) => viewMatch(x, k))).length;
-      if (n) count = ` ${n}`;
+      count = P.buildTrees(state.model.items).filter((r) => anyDesc(r, (x) => viewMatch(x, k))).length;
     }
-    b.innerHTML = `<span class="nk">${i + 1}</span> ${label}<span class="nc">${count}</span>`;
-    b.onclick = () => {
-      state.view = k;
-      state.projectView = null;
-      state.selectedId = null;
-      render();
-    };
-    side.append(b);
+    side.append(
+      navBtn({
+        active: state.view === k,
+        key: i + 1,
+        label,
+        count,
+        onclick: () => {
+          state.view = k;
+          state.projectView = null;
+          state.selectedId = null;
+          render();
+        },
+      })
+    );
   });
 
   const projs = allProjects();
   if (projs.length) {
-    const ph = document.createElement("div");
-    ph.className = "sidehead";
-    ph.textContent = "projects";
-    side.append(ph);
-    const all = document.createElement("button");
-    all.className = "navbtn tiny" + (!state.projectFilter && !state.projectView ? " on" : "");
-    all.innerHTML = `<span class="nk">\\</span> all`;
-    all.title = state.projectView ? "back to all projects (\\)" : "clear project filter (\\)";
-    all.onclick = () => {
-      if (state.projectView) return exitProjectDetail();
-      state.projectFilter = null;
-      render();
-    };
-    side.append(all);
-    // numbered 1–9 to match ⌃1–⌃9 (and the P picker)
-    projs.forEach((p, i) => {
-      const b = document.createElement("button");
-      const active = state.projectView ? state.projectView === p : state.projectFilter === p;
-      b.className = "navbtn tiny" + (active ? " on" : "");
-      const nk = i < 9 ? `⌃${i + 1}` : "";
-      b.innerHTML = `<span class="nk">${nk}</span><span class="dot" style="background:${projColor(p)}"></span><span class="plabel">${p}</span>`;
-      if (i < 9) b.title = `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})`;
-      b.onclick = () => goToProject(p);
-      side.append(b);
-    });
+    side.append(el("div", { class: "sidehead" }, "projects"));
+    side.append(
+      navBtn({
+        cls: "tiny",
+        active: !state.projectFilter && !state.projectView,
+        key: "\\",
+        label: "all",
+        title: state.projectView ? "back to all projects (\\)" : "clear project filter (\\)",
+        onclick: () => {
+          if (state.projectView) return exitProjectDetail();
+          state.projectFilter = null;
+          render();
+        },
+      })
+    );
+    projs.forEach((p, i) =>
+      side.append(
+        navBtn({
+          cls: "tiny",
+          active: state.projectView ? state.projectView === p : state.projectFilter === p,
+          key: i < 9 ? `⌃${i + 1}` : "",
+          label: p,
+          dot: projColor(p),
+          title: i < 9 ? `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})` : null,
+          onclick: () => goToProject(p),
+        })
+      )
+    );
   }
 
-  // location filter — a small always-visible row; "anywhere" = off (shows all)
-  const lh = document.createElement("div");
-  lh.className = "sidehead";
-  lh.textContent = "location";
-  side.append(lh);
-  const lall = document.createElement("button");
-  lall.className = "navbtn tiny" + (state.locationFilter ? "" : " on");
-  lall.innerHTML = `<span class="nk">@</span> anywhere`;
-  lall.title = "clear location filter (@)";
-  lall.onclick = () => {
-    state.locationFilter = null;
-    render();
-  };
-  side.append(lall);
-  P.LOCATIONS.forEach((loc) => {
-    const b = document.createElement("button");
-    b.className = "navbtn tiny" + (state.locationFilter === loc ? " on" : "");
-    b.innerHTML = `<span class="nk"></span><span class="plabel">${LOC_LABEL[loc]}</span>`;
-    b.title = `show only @${loc} tasks`;
-    b.onclick = () => {
-      state.locationFilter = state.locationFilter === loc ? null : loc;
-      state.selectedId = null;
-      render();
-    };
-    side.append(b);
-  });
+  // location filter — always-visible; "anywhere" = off
+  side.append(el("div", { class: "sidehead" }, "location"));
+  side.append(
+    navBtn({
+      cls: "tiny",
+      active: !state.locationFilter,
+      key: "@",
+      label: "anywhere",
+      title: "clear location filter (@)",
+      onclick: () => {
+        state.locationFilter = null;
+        render();
+      },
+    })
+  );
+  P.LOCATIONS.forEach((loc) =>
+    side.append(
+      navBtn({
+        cls: "tiny",
+        active: state.locationFilter === loc,
+        label: LOC_LABEL[loc],
+        title: `show only @${loc} tasks`,
+        onclick: () => {
+          state.locationFilter = state.locationFilter === loc ? null : loc;
+          state.selectedId = null;
+          render();
+        },
+      })
+    )
+  );
 
-  app.append(side);
+  return side;
+}
 
-  const mainWrap = document.createElement("main");
-  const head = document.createElement("header");
-  const headTitle = state.projectView
-    ? `+${state.projectView}`
-    : VIEWS.find((v) => v[0] === state.view)[1];
-  head.innerHTML = `<h1>${headTitle}</h1>`;
+function renderHeader() {
+  const head = el("header", null, el("h1", null, state.projectView ? `+${state.projectView}` : VIEWS.find((v) => v[0] === state.view)[1]));
+
   if (state.search) {
     const s = chip('search: "' + state.search + '" ✕', "filter");
     s.onclick = () => {
@@ -1726,50 +1741,46 @@ function render() {
     head.append(s);
   }
   if (state.locationFilter) {
-    const l = chip((LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕", "filter");
-    l.title = "location filter — showing only tasks tagged this location. Click to clear.";
+    const l = chip((LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕", "filter", "location filter — showing only tasks tagged this location. Click to clear.");
     l.onclick = () => {
       state.locationFilter = null;
       render();
     };
     head.append(l);
   }
-  if (!state.demo) {
-    if (state.saveError) {
-      const c = chip("save failed · retry", "savefail", "couldn't reach the server — click to retry now");
-      c.onclick = () => save();
-      head.append(c);
-    } else if (state.dirty || state.saving) {
-      head.append(chip("saving…", "saving"));
-    } else {
-      head.append(chip("synced", "synced", "your edits are saved to the server"));
-    }
-  }
   if (state.demo) {
     const d = chip("DEMO · changes aren't saved · exit ✕", "demo");
-    d.onclick = () => {
-      location.href = location.pathname;
-    };
+    d.onclick = () => (location.href = location.pathname);
     head.append(d);
+  } else if (state.saveError) {
+    const c = chip("save failed · retry", "savefail", "couldn't reach the server — click to retry now");
+    c.onclick = () => save();
+    head.append(c);
+  } else if (state.dirty || state.saving) {
+    head.append(chip("saving…", "saving"));
+  } else {
+    head.append(chip("synced", "synced", "your edits are saved to the server"));
   }
-  mainWrap.append(head);
+  return head;
+}
 
-  const main = document.createElement("div");
-  main.className = "main";
+function render() {
+  const app = $("#app");
+  RENDERING = true; // tearing down the DOM blurs the edit input — don't treat that as a commit
+  app.innerHTML = "";
+  state._focusEl = null;
+
+  app.append(renderSidebar());
+
+  const main = el("div", { class: "main" });
   paintList(main);
-  mainWrap.append(main);
-  app.append(mainWrap);
+  app.append(el("main", null, renderHeader(), main));
 
   if (state.ask) app.append(askEl());
   if (state.picker) app.append(pickerEl());
   if (state.overlay === "help") app.append(helpEl());
   if (state.deps) app.append(depsEl());
-  if (state.toastMsg) {
-    const tt = document.createElement("div");
-    tt.className = "toast";
-    tt.textContent = state.toastMsg;
-    app.append(tt);
-  }
+  if (state.toastMsg) app.append(el("div", { class: "toast" }, state.toastMsg));
 
   RENDERING = false;
   if (state._focusEl) state._focusEl.focus();
