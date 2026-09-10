@@ -1336,29 +1336,26 @@ function renderProjectDetail(main) {
   const tom = tomorrowISO();
   state._flat = [];
 
-  const controls = document.createElement("div");
-  controls.className = "controls";
-  const back = document.createElement("button");
-  back.textContent = "\\ all projects";
-  back.title = "back to the project list";
-  back.onclick = exitProjectDetail;
-  controls.append(back);
-  const hint = document.createElement("span");
-  hint.className = "chint";
-  hint.textContent = "⌃1–⌃9 switch project";
-  controls.append(hint);
-  const spacer = document.createElement("span");
-  spacer.style.flex = "1";
-  controls.append(spacer);
-  const dt = document.createElement("button");
-  dt.textContent = state.projectShowDone ? "hide done" : "show done";
-  dt.className = state.projectShowDone ? "on" : "";
-  dt.onclick = () => {
-    state.projectShowDone = !state.projectShowDone;
-    render();
-  };
-  controls.append(dt);
-  main.append(controls);
+  main.append(
+    el(
+      "div",
+      { class: "controls" },
+      el("button", { title: "back to the project list", onclick: exitProjectDetail }, "\\ all projects"),
+      el("span", { class: "chint" }, "⌃1–⌃9 switch project"),
+      el("span", { style: { flex: "1" } }),
+      el(
+        "button",
+        {
+          class: state.projectShowDone ? "on" : null,
+          onclick: () => {
+            state.projectShowDone = !state.projectShowDone;
+            render();
+          },
+        },
+        state.projectShowDone ? "hide done" : "show done"
+      )
+    )
+  );
 
   const roots = P.buildTrees(state.model.items)
     .filter((r) => anyDesc(r, (x) => x.projects.includes(name)))
@@ -1381,12 +1378,7 @@ function renderProjectDetail(main) {
     main.append(sectionHeadEl(`${label} · ${g.length}`));
     walkRows(g, main);
   }
-  if (!shown) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "No open tasks in this project — press a to add one.";
-    main.append(e);
-  }
+  if (!shown) main.append(el("div", { class: "empty" }, "No open tasks in this project — press a to add one."));
   if (state.projectShowDone && doneTrees.length) {
     main.append(sectionHeadEl(`done · ${doneTrees.length}`));
     walkRows(doneTrees, main);
@@ -1924,211 +1916,151 @@ function walkInto(id) {
 
 // inline "find a task and link it" field for one column of the deps overlay
 function depsSearchEl(placeholder, eligible, onPick) {
-  const box = document.createElement("div");
-  box.className = "depssearch";
-  const inp = document.createElement("input");
-  inp.placeholder = placeholder;
-  const results = document.createElement("div");
-  results.className = "depsresults";
+  const results = el("div", { class: "depsresults" });
   const refresh = () => {
-    results.innerHTML = "";
     const q = inp.value.trim().toLowerCase();
-    if (!q) return;
-    const hits = eligible()
-      .filter((t) => (t.title || "").toLowerCase().includes(q))
-      .slice(0, 6);
-    for (const t of hits) {
-      const r = document.createElement("button");
-      r.className = "depsresult";
-      r.textContent = t.title || "(untitled)";
-      r.onmousedown = (e) => {
-        e.preventDefault(); // fire before the input's blur
-        onPick(t);
-      };
-      results.append(r);
-    }
-    if (!hits.length) {
-      const e = document.createElement("div");
-      e.className = "note";
-      e.textContent = "no match";
-      results.append(e);
-    }
+    const hits = q ? eligible().filter((t) => (t.title || "").toLowerCase().includes(q)).slice(0, 6) : [];
+    results.replaceChildren(
+      ...hits.map((t) =>
+        el(
+          "button",
+          {
+            class: "depsresult",
+            onmousedown: (e) => {
+              e.preventDefault(); // fire before the input's blur
+              onPick(t);
+            },
+          },
+          t.title || "(untitled)"
+        )
+      ),
+      ...(q && !hits.length ? [el("div", { class: "note" }, "no match")] : [])
+    );
   };
-  inp.oninput = refresh;
-  inp.onkeydown = (e) => {
-    e.stopPropagation();
-    if (e.key === "Escape") {
-      inp.value = "";
-      refresh();
-      inp.blur();
-    }
-  };
-  box.append(inp, results);
-  return box;
+  const inp = el("input", {
+    placeholder,
+    oninput: refresh,
+    onkeydown: (e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        inp.value = "";
+        refresh();
+        inp.blur();
+      }
+    },
+  });
+  return el("div", { class: "depssearch" }, inp, results);
 }
 
 function depsEl() {
   const byId = new Map(state.model.items.filter((i) => i.id).map((i) => [i.id, i]));
   const it = byId.get(state.deps);
-  const wrap = document.createElement("div");
-  wrap.className = "ask";
-  wrap.onclick = (e) => {
-    if (e.target === wrap) closeDeps();
-  };
-  const box = document.createElement("div");
-  box.className = "askbox wide deps";
-  wrap.append(box);
-  if (!it) {
-    box.textContent = "gone.";
-    return wrap;
-  }
+  const wrap = el("div", { class: "ask", onclick: (e) => e.target.classList.contains("ask") && closeDeps() });
+  if (!it) return wrap.append(el("div", { class: "askbox wide deps" }, "gone.")), wrap;
 
-  const head = document.createElement("div");
-  head.className = "depshead";
-  if (state._depsTrail.length) {
-    const back = document.createElement("button");
-    back.className = "kbd";
-    back.textContent = "← back";
-    back.onclick = () => {
-      state.deps = state._depsTrail.pop();
-      render();
-    };
-    head.append(back);
-  }
-  const title = document.createElement("button");
-  title.className = "depstitle";
-  title.textContent = (it.done ? "✓ " : "") + (it.title || "(untitled)");
-  title.title = "select this task in the list";
-  title.onclick = () => {
-    selectItem(it.id);
-    closeDeps();
-  };
-  head.append(title);
-  box.append(head);
+  const entries = []; // ids in render order, for the number-key walk-in
+  const col = (label, list, describe, unlink, footer) =>
+    el(
+      "div",
+      { class: "depscol" },
+      el("h3", null, `${label} · ${list.length}`),
+      list.length ? null : el("div", { class: "note" }, "—"),
+      ...list.map((entry) => {
+        const n = entries.length + 1;
+        entries.push(entry.id || null);
+        return el(
+          "div",
+          { class: "depsrow" },
+          el(
+            "button",
+            { class: "depsgo", disabled: !entry.id, onclick: () => entry.id && walkInto(entry.id) },
+            el("span", { class: "pnum" }, n < 10 ? n : ""),
+            describe(entry)
+          ),
+          el("button", { class: "depsx", title: "unlink", onclick: () => mutate(() => unlink(entry)) }, "✕")
+        );
+      }),
+      footer
+    );
 
-  const cols = document.createElement("div");
-  cols.className = "depscols";
-  box.append(cols);
-
-  const entries = []; // ids in render order, for number-key walk-in
-  const col = (label, list, describe, unlink, footer) => {
-    const c = document.createElement("div");
-    c.className = "depscol";
-    const h = document.createElement("h3");
-    h.textContent = `${label} · ${list.length}`;
-    c.append(h);
-    if (!list.length) {
-      const e = document.createElement("div");
-      e.className = "note";
-      e.textContent = "—";
-      c.append(e);
-    }
-    for (const entry of list) {
-      const row = document.createElement("div");
-      row.className = "depsrow";
-      const n = entries.length + 1;
-      const go = document.createElement("button");
-      go.className = "depsgo";
-      go.innerHTML = `<span class="pnum">${n < 10 ? n : ""}</span>`;
-      go.append(document.createTextNode(describe(entry)));
-      go.disabled = !entry.id;
-      go.onclick = () => entry.id && walkInto(entry.id);
-      row.append(go);
-      const x = document.createElement("button");
-      x.className = "depsx";
-      x.textContent = "✕";
-      x.title = "unlink";
-      x.onclick = () => mutate(() => unlink(entry));
-      row.append(x);
-      entries.push(entry.id || null);
-      c.append(row);
-    }
-    c.append(footer);
-    return c;
-  };
-
-  const linkedIds = new Set(it.needs);
   const openTasks = () => state.model.items.filter((t) => t.id && !t.done && t.id !== it.id);
+  const linkedIds = new Set(it.needs);
+  const newLinked = (dir) => () => {
+    state.deps = null;
+    state._depsTrail = [];
+    createLinkedItem(it, dir);
+  };
 
-  // waiting on — its needs:
-  const needs = it.needs.map((nid) => byId.get(nid) || { dangling: nid });
-  const waitFoot = document.createElement("div");
-  waitFoot.className = "depsfoot";
-  waitFoot.append(
+  const waitFoot = el(
+    "div",
+    { class: "depsfoot" },
     depsSearchEl(
       "find a task that blocks this…",
       () => openTasks().filter((t) => !linkedIds.has(t.id)),
-      (t) => {
-        mutate(() => it.needs.push(t.id));
-      }
-    )
+      (t) => mutate(() => it.needs.push(t.id))
+    ),
+    el("button", { class: "kadd", onclick: newLinked("blocking") }, "＋ new task that blocks this")
   );
-  const newBlk = document.createElement("button");
-  newBlk.className = "kadd";
-  newBlk.textContent = "＋ new task that blocks this";
-  newBlk.onclick = () => {
-    const sel = it;
-    state.deps = null;
-    state._depsTrail = [];
-    createLinkedItem(sel, "blocking");
-  };
-  waitFoot.append(newBlk);
-  cols.append(
-    col(
-      "waiting on",
-      needs,
-      (x) =>
-        x.dangling
-          ? `⚠ unknown: ${x.dangling}`
-          : `${x.done ? "✓ " : x._blockedBy?.length ? "🔒 " : "○ "}${x.title || "(untitled)"}`,
-      (x) => {
-        it.needs = it.needs.filter((nid) => nid !== (x.id || x.dangling));
-      },
-      waitFoot
-    )
-  );
-
-  // blocking — tasks whose needs: point here
-  const depFoot = document.createElement("div");
-  depFoot.className = "depsfoot";
-  depFoot.append(
+  const depFoot = el(
+    "div",
+    { class: "depsfoot" },
     depsSearchEl(
       "find a task that depends on this…",
       () => openTasks().filter((t) => !t.needs.includes(it.id)),
-      (t) => {
-        mutate(() => t.needs.push(it.id));
-      }
-    )
-  );
-  const newDep = document.createElement("button");
-  newDep.className = "kadd";
-  newDep.textContent = "＋ new task that depends on this";
-  newDep.onclick = () => {
-    const sel = it;
-    state.deps = null;
-    state._depsTrail = [];
-    createLinkedItem(sel, "dependent");
-  };
-  depFoot.append(newDep);
-  cols.append(
-    col(
-      "blocking",
-      it._blocking || [],
-      (x) => {
-        const ready = !x.done && x._blockedBy.filter((b) => b.id !== it.id).every((b) => b.done);
-        return `${x.done ? "✓ " : ready ? "▸ " : "· "}${x.title || "(untitled)"}`;
-      },
-      (x) => {
-        x.needs = x.needs.filter((nid) => nid !== it.id);
-      },
-      depFoot
-    )
+      (t) => mutate(() => t.needs.push(it.id))
+    ),
+    el("button", { class: "kadd", onclick: newLinked("dependent") }, "＋ new task that depends on this")
   );
 
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent = "number → walk in · ✕ → unlink · title → select in list · Backspace → back · Esc → close";
-  box.append(hint);
+  wrap.append(
+    el(
+      "div",
+      { class: "askbox wide deps" },
+      el(
+        "div",
+        { class: "depshead" },
+        state._depsTrail.length > 0 &&
+          el("button", { class: "kbd", onclick: () => { state.deps = state._depsTrail.pop(); render(); } }, "← back"),
+        el(
+          "button",
+          {
+            class: "depstitle",
+            title: "select this task in the list",
+            onclick: () => {
+              selectItem(it.id);
+              closeDeps();
+            },
+          },
+          (it.done ? "✓ " : "") + (it.title || "(untitled)")
+        )
+      ),
+      el(
+        "div",
+        { class: "depscols" },
+        col(
+          "waiting on",
+          it.needs.map((nid) => byId.get(nid) || { dangling: nid }),
+          (x) =>
+            x.dangling
+              ? `⚠ unknown: ${x.dangling}`
+              : `${x.done ? "✓ " : x._blockedBy?.length ? "🔒 " : "○ "}${x.title || "(untitled)"}`,
+          (x) => (it.needs = it.needs.filter((nid) => nid !== (x.id || x.dangling))),
+          waitFoot
+        ),
+        col(
+          "blocking",
+          it._blocking || [],
+          (x) => {
+            const ready = !x.done && x._blockedBy.filter((b) => b.id !== it.id).every((b) => b.done);
+            return `${x.done ? "✓ " : ready ? "▸ " : "· "}${x.title || "(untitled)"}`;
+          },
+          (x) => (x.needs = x.needs.filter((nid) => nid !== it.id)),
+          depFoot
+        )
+      ),
+      el("p", { class: "hint" }, "number → walk in · ✕ → unlink · title → select in list · Backspace → back · Esc → close")
+    )
+  );
   wrap._entries = entries;
   return wrap;
 }
