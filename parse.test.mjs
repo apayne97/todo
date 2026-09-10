@@ -348,3 +348,35 @@ test("location: @tag on tasks, location: on projects, effective derivation", () 
   assert.equal(again.items[0].location, "out");
   assert.equal(again.projects.find((p) => p.name === "home-stuff").location, "home");
 });
+
+test("archived project: block survives, tasks flagged _archivedProject", () => {
+  const src = [
+    "# Todos",
+    "",
+    "- [ ] old thing +oa due:2026-10-04 id:x1",
+    "- [ ] shared +oa +live id:x2",
+    "- [ ] fresh +live id:x3",
+    "",
+    "## Done",
+    "",
+    "## Projects",
+    "",
+    "### oa",
+    "old work",
+    "archived: 2026-09-10",
+    "",
+    "### live",
+    "color: #7ad19a",
+    "",
+  ].join("\n");
+  const m = P.parse(src);
+  assert.equal(m.projects.find((p) => p.name === "oa").archived, "2026-09-10");
+  P.computeStatus(m, "2026-09-10");
+  const by = (id) => m.items.find((i) => i.id === id);
+  assert.equal(by("x1")._archivedProject, true); // only +oa, archived
+  assert.equal(by("x2")._archivedProject, false); // also +live
+  assert.equal(by("x3")._archivedProject, false);
+  // the block round-trips even though "old work" desc alone would keep it anyway
+  const again = P.parse(P.serialize(m));
+  assert.equal(again.projects.find((p) => p.name === "oa").archived, "2026-09-10");
+});

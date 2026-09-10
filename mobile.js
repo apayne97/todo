@@ -255,6 +255,7 @@ function firstDate(it) {
 
 function matches(it, view, t) {
   if (it.done) return false;
+  if (it._archivedProject) return false; // hidden — only shows in that project's drill-in (desktop)
   const fd = firstDate(it);
   if (view === "today") return !it.isBlocked && !!fd && fd <= t;
   if (view === "inbox") return !it.isBlocked && !it.sched && !it.due && !it._effSched && !it._effDue;
@@ -291,6 +292,7 @@ function allProjects() {
   for (const it of state.model.items) for (const p of it.projects) s.add(p);
   for (const p of state.model.projects || []) s.add(p.name);
   for (const h of state.model.habits || []) s.delete(h.name);
+  for (const p of state.model.projects || []) if (p.archived) s.delete(p.name);
   const ord = state.model.projectOrder || [];
   const pos = (n) => {
     const i = ord.indexOf(n);

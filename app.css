@@ -1062,6 +1062,32 @@ button.kbd:hover {
   font-size: 12px;
 }
 
+.parch {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 2px 16px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--dim);
+}
+
+.parch.sel {
+  border-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.parchname {
+  color: var(--fg);
+  opacity: 0.7;
+}
+
+.parchmeta {
+  font-size: 12px;
+}
+
 /* toast */
 .toast {
   position: fixed;

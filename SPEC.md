@@ -228,10 +228,20 @@ On the Projects view: **click a card** (or `↵` / `o` on the highlighted one) t
 **open** the project. `j`/`k` highlights a card without opening it, then `J`/`K`
 reorder it (writes/updates the `order:` line and renumbers `⌃N`), `e` description
 (multi-line), `r` rename, `n` info lines, `l` link, `C` color (swatch picker +
-native color input); `a` = new project. Clicking the description text edits it. **Rename** rewrites the `### heading`, every `+tag` on
+native color input), `#` archive; `a` = new project. Clicking the description text edits it. **Rename** rewrites the `### heading`, every `+tag` on
 tasks, the active filter and the selection in one step; it refuses a name that
 already exists. Creating a new item while a project filter is active tags it with
 that project; `P` on any item sets its project (with a "new project" option).
+
+**Archiving a project** (`#` on a selected card) adds an `archived: <date>` line
+to its `### block`. An archived project drops out of `allProjects()` — gone from
+the sidebar, `⌃1`–`⌃9`, the `P` picker and the mobile filter sheet — and its
+**open tasks vanish from every list view** (`viewMatch` returns false when
+`it._archivedProject`, set in `computeStatus` for a task whose project tags are
+*all* archived; subtasks inherit). They still show in that project's drill-in,
+opened from the muted **archived** section at the bottom of the Projects view.
+`#` again on an archived project restores it (open tasks reappear). The `### block`
+and `+tag` history are always kept.
 
 **Project drill-in** (`state.projectView`, a sub-mode of the Projects view — not
 a numbered view): a full editable list of *every* task in that project — buckets

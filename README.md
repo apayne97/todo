@@ -153,7 +153,10 @@ Manage them on the Projects view (`8`): **click a project** (or `↵`) to open a
 full editable task list for it — buckets by date, "show done" toggle. Inside,
 `⌃1`–`⌃9` swaps to another project and `\` goes back to the card list. To
 highlight a card without opening it, use `j`/`k` — then `J`/`K` reorder it (this
-writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it.
+writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it, or
+`#` **archive** it (an `archived:` line; the project and all its open tasks
+disappear from the sidebar and every list — they stay reachable in the project's
+drill-in from the "archived" section at the bottom; `#` again restores).
 
 **Location.** Tag a task `@home` / `@work` / `@transit` / `@out`. A `location:
 work` line on a project applies to all its tasks. `@` on the desktop (or the

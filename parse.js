@@ -237,7 +237,7 @@ export function parse(text) {
     if (section === "projects") {
       const ph = /^###\s+(.+?)\s*$/.exec(line);
       if (ph) {
-        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null, color: null, location: null };
+        curProject = { name: ph[1].trim(), desc: [], meta: [], link: null, color: null, location: null, archived: null };
         projects.push(curProject);
         continue;
       }
@@ -253,6 +253,8 @@ export function parse(text) {
       if (pc) { if (!curProject.color) curProject.color = pc[1].trim(); continue; }
       const ploc = PROJ_LOC_RE.exec(line.trim());
       if (ploc) { if (!curProject.location) curProject.location = ploc[1].toLowerCase(); continue; }
+      const parc = /^archived:\s*(\d{4}-\d{2}-\d{2})?\s*$/i.exec(line.trim());
+      if (parc) { curProject.archived = parc[1] || "yes"; continue; }
       const kv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
       if (kv) curProject.meta.push([kv[1], kv[2]]);
       else curProject.desc.push(line.trim());
@@ -291,6 +293,7 @@ export function parse(text) {
       link: p.link || "",
       color: p.color || "",
       location: p.location || "",
+      archived: p.archived || null,
     })),
     habits: habits.map((h) => ({
       name: h.name,
@@ -367,7 +370,12 @@ export function serialize(model) {
   let projects = (model.projects || []).filter(
     (p) =>
       p.name &&
-      (p.desc.trim() || p.meta.length || (p.link || "").trim() || (p.color || "").trim() || (p.location || "").trim())
+      (p.desc.trim() ||
+        p.meta.length ||
+        (p.link || "").trim() ||
+        (p.color || "").trim() ||
+        (p.location || "").trim() ||
+        p.archived)
   );
   if (showOrder) {
     projects = projects
@@ -389,6 +397,7 @@ export function serialize(model) {
       if ((p.color || "").trim()) out.push(`color: ${p.color.trim()}`);
       if ((p.link || "").trim()) out.push(`link: ${p.link.trim()}`);
       if ((p.location || "").trim()) out.push(`location: ${p.location.trim()}`);
+      if (p.archived) out.push(`archived: ${/^\d{4}-\d{2}-\d{2}$/.test(p.archived) ? p.archived : ""}`.trimEnd());
       for (const [k, v] of p.meta) out.push(`${k}: ${v}`);
       out.push("");
     }
@@ -512,6 +521,17 @@ export function computeStatus(model, todayISO) {
     for (const c of it.children) propLoc(c, it._effLocation);
   };
   for (const r of buildTrees(items)) propLoc(r, null);
+
+  // Archived projects: a task whose project tags are ALL archived (and it has at
+  // least one) is hidden from the date/inbox/blocked views — it only shows in
+  // that project's drill-in. Subtasks inherit the flag from their parent.
+  const archivedProj = new Set((model.projects || []).filter((p) => p.archived).map((p) => p.name));
+  const propArch = (it, pArch) => {
+    const own = it.projects.length > 0 && it.projects.every((p) => archivedProj.has(p));
+    it._archivedProject = own || pArch;
+    for (const c of it.children) propArch(c, it._archivedProject);
+  };
+  for (const r of buildTrees(items)) propArch(r, false);
 }
 
 // Monday (ISO week start, Monday=0) for a Date.

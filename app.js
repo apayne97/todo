@@ -410,6 +410,7 @@ function parseRepeat(v) {
 // Effective project order: the explicit `order:` list first (state.model
 // .projectOrder, set by reorderProject), then anything unlisted, alphabetically.
 // This order drives the sidebar, the ⌃1–⌃9 mapping, the P picker and the cards.
+// active (non-archived) projects — drives the sidebar / ⌃N / P picker / cards
 function allProjects() {
   const s = new Set();
   for (const it of state.model.items) for (const p of it.projects) s.add(p);
@@ -417,6 +418,7 @@ function allProjects() {
   // habit tags (from logged reps) aren't projects — keep them out of the
   // sidebar / ⌃N mapping / P picker
   for (const h of state.model.habits || []) s.delete(h.name);
+  for (const p of state.model.projects) if (p.archived) s.delete(p.name);
   const ord = state.model.projectOrder || [];
   const pos = (n) => {
     const i = ord.indexOf(n);
@@ -460,12 +462,13 @@ function projectEntry(name) {
 function ensureProjectEntry(name) {
   let e = projectEntry(name);
   if (!e) {
-    e = { name, desc: "", meta: [], link: "", color: "", location: "" };
+    e = { name, desc: "", meta: [], link: "", color: "", location: "", archived: null };
     state.model.projects.push(e);
   }
   if (e.link == null) e.link = "";
   if (e.color == null) e.color = "";
   if (e.location == null) e.location = "";
+  if (e.archived === undefined) e.archived = null;
   return e;
 }
 
@@ -539,6 +542,8 @@ function isOverdue(it) {
 function viewMatch(it, view, t, we) {
   if (view === "done") return it.done;
   if (it.done) return false;
+  // an archived project's tasks vanish from every list — only its drill-in shows them
+  if (it._archivedProject) return false;
   // effective dates (see computeStatus): a subtask inherits its parent's start,
   // so it isn't pulled into an earlier view ahead of the task it belongs to
   const s = it._effSched ?? it.sched;
@@ -1312,15 +1317,16 @@ function deleteHabit(h) {
 
 function renderProjects(main) {
   const rows = projectSummaries();
-  state._flat = rows.map((p) => p.name);
+  const archived = (state.model.projects || []).filter((p) => p.archived);
+  state._flat = [...rows.map((p) => p.name), ...archived.map((p) => p.name)];
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
   hint.textContent =
-    "click / ↵ open · j/k select, then: J/K reorder · e description · r rename · n info · l link · C color · a new";
+    "click / ↵ open · j/k select, then: J/K reorder · e desc · r rename · n info · l link · C color · # archive · a new";
   main.append(hint);
 
-  if (!rows.length) {
+  if (!rows.length && !archived.length) {
     const e = document.createElement("div");
     e.className = "empty";
     e.textContent = "No projects yet. Press a to add one, or tag a task with +name.";
@@ -1392,6 +1398,40 @@ function renderProjects(main) {
     }
     main.append(card);
   });
+
+  if (archived.length) {
+    main.append(sectionHeadEl(`archived · ${archived.length}  ·  ↵ open · # restore`));
+    for (const p of archived) {
+      const open = state.model.items.filter((it) => !it.done && it.projects.includes(p.name)).length;
+      const row = document.createElement("div");
+      row.className = "parch" + (p.name === state.selectedId ? " sel" : "");
+      row.onclick = () => openProjectDetail(p.name);
+      const nm = document.createElement("span");
+      nm.className = "parchname";
+      nm.textContent = p.name;
+      row.append(nm);
+      const meta = document.createElement("span");
+      meta.className = "parchmeta";
+      const when = /^\d{4}-\d{2}-\d{2}$/.test(p.archived) ? ` · archived ${relDay(p.archived)}` : "";
+      meta.textContent = `${open} open${when}`;
+      row.append(meta);
+      main.append(row);
+    }
+  }
+}
+
+function archiveProject(name) {
+  mutate(() => (ensureProjectEntry(name).archived = todayISO()));
+  if (state.projectFilter === name) state.projectFilter = null;
+  toast(`archived +${name} — its open tasks are hidden from the lists`);
+}
+
+function restoreProject(name) {
+  mutate(() => {
+    const e = projectEntry(name);
+    if (e) e.archived = null;
+  });
+  toast(`restored +${name}`);
 }
 
 function editProjectDesc(name) {
@@ -1520,7 +1560,7 @@ function editProjectMeta(name) {
       if (linkPair) ent.link = linkPair[1];
       const locPair = pairs.find(([k]) => k.toLowerCase() === "location");
       if (locPair) ent.location = P.LOCATIONS.includes(locPair[1].toLowerCase().trim()) ? locPair[1].toLowerCase().trim() : "";
-      ent.meta = pairs.filter(([k]) => !["link", "location"].includes(k.toLowerCase()));
+      ent.meta = pairs.filter(([k]) => !["link", "location", "archived"].includes(k.toLowerCase()));
     })
   );
 }
@@ -2813,7 +2853,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // Projects view: contextual keys (not rebindable)
-  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a", "J", "K"].includes(k)) {
+  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a", "J", "K", "#", "Delete"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -2822,9 +2862,12 @@ document.addEventListener("keydown", (e) => {
         editProjectDesc(name);
       });
     if (!state.selectedId) return;
+    const arch = projectEntry(state.selectedId)?.archived;
+    if (k === "#" || k === "Delete") return arch ? restoreProject(state.selectedId) : archiveProject(state.selectedId);
+    if (k === "Enter" || k === "o") return openProjectDetail(state.selectedId);
+    if (arch) return; // an archived project — only ↵ (open) and # (restore) apply
     if (k === "J") return reorderProject(state.selectedId, -1);
     if (k === "K") return reorderProject(state.selectedId, 1);
-    if (k === "Enter" || k === "o") return openProjectDetail(state.selectedId);
     if (k === "n") return editProjectMeta(state.selectedId);
     if (k === "l") return editProjectLink(state.selectedId);
     if (k === "C") return editProjectColor(state.selectedId);
