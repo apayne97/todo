@@ -1788,68 +1788,47 @@ function render() {
 }
 
 function askEl() {
-  const multi = state.ask.multiline;
-  const wrap = document.createElement("div");
-  wrap.className = "ask";
-  const box = document.createElement("div");
-  box.className = "askbox";
-  box.innerHTML = `<label>${state.ask.label}</label>`;
-  const isColor = state.ask.color;
-  const inp = document.createElement(multi ? "textarea" : "input");
-  if (isColor) {
-    inp.type = "color";
-    inp.value = /^#[0-9a-f]{6}$/i.test(state.ask.initial || "") ? state.ask.initial : "#4da6e5";
-  } else {
-    inp.value = state.ask.initial || "";
-  }
-  if (multi) inp.rows = 5;
-  const submit = () => {
+  const { multiline: multi, color: isColor } = state.ask;
+  const close = () => {
+    state.ask = null;
+    render();
+  };
+  const inp = el(multi ? "textarea" : "input", {
+    type: isColor ? "color" : null,
+    rows: multi ? 5 : null,
+    value: isColor
+      ? /^#[0-9a-f]{6}$/i.test(state.ask.initial || "")
+        ? state.ask.initial
+        : "#4da6e5"
+      : state.ask.initial || "",
+    onkeydown: (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter" && (!multi || e.shiftKey)) {
+        e.preventDefault();
+        submit();
+      } else if (e.key === "Escape") close();
+    },
+    onchange: isColor ? () => submit() : null,
+  });
+  function submit() {
     const cb = state.ask.onSubmit;
     state.ask = null;
     cb(inp.value);
     if (!state.ask) render();
-  };
-  inp.onkeydown = (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter" && (!multi || e.shiftKey)) {
-      e.preventDefault();
-      submit();
-    } else if (e.key === "Escape") {
-      state.ask = null;
-      render();
-    }
-  };
-  if (isColor) inp.onchange = submit;
-  box.append(inp);
-  if (isColor) {
-    const bar = document.createElement("div");
-    bar.className = "askbar";
-    const save = document.createElement("button");
-    save.textContent = "Use this color";
-    save.onclick = submit;
-    bar.append(save);
-    box.append(bar);
   }
-  if (multi) {
-    const bar = document.createElement("div");
-    bar.className = "askbar";
-    const save = document.createElement("button");
-    save.textContent = "Save";
-    save.onclick = submit;
-    const hint = document.createElement("span");
-    hint.className = "hint";
-    hint.textContent = "⇧↵ to save · ↵ for a new line · Esc to cancel";
-    bar.append(save, hint);
-    box.append(bar);
-  }
-  wrap.append(box);
-  wrap.onclick = (e) => {
-    if (e.target === wrap) {
-      state.ask = null;
-      render();
-    }
-  };
-  return wrap;
+  const bar =
+    (isColor || multi) &&
+    el(
+      "div",
+      { class: "askbar" },
+      el("button", { onclick: () => submit() }, isColor ? "Use this color" : "Save"),
+      multi && el("span", { class: "hint" }, "⇧↵ to save · ↵ for a new line · Esc to cancel")
+    );
+  return el(
+    "div",
+    { class: "ask", onclick: (e) => e.target.classList.contains("ask") && close() },
+    el("div", { class: "askbox" }, el("label", null, state.ask.label), inp, bar)
+  );
 }
 
 function askText(label, initial, onSubmit) {
@@ -1894,100 +1873,76 @@ function choosePicker(opt) {
 
 function pickerEl() {
   const p = state.picker;
-  const wrap = document.createElement("div");
-  wrap.className = "ask";
-  const box = document.createElement("div");
-  box.className = "askbox";
-  const lbl = document.createElement("label");
-  lbl.textContent = p.title;
-  if (p.filterable) {
-    const f = document.createElement("span");
-    f.className = "pfilter";
-    f.textContent = p.filter ? ` ›  ${p.filter}` : "  (type to filter)";
-    lbl.append(f);
-  }
-  box.append(lbl);
-
-  const list = document.createElement("div");
-  list.className = "picklist";
   const vis = pickerVisible();
-  if (!vis.length) {
-    const e = document.createElement("div");
-    e.className = "pickrow empty";
-    e.textContent = "no matches";
-    list.append(e);
-  }
-  vis.forEach((o, i) => {
-    const row = document.createElement("div");
-    row.className = "pickrow" + (i === p.hi ? " hi" : "") + (o.action ? " action" : "");
-    if (p.numbered && i < 9) {
-      const num = document.createElement("span");
-      num.className = "pnum";
-      num.textContent = i + 1;
-      row.append(num);
-    }
-    if (o.checked != null) {
-      const c = document.createElement("span");
-      c.className = "pcheck";
-      c.textContent = o.checked ? "✓" : "";
-      row.append(c);
-    }
-    if (o.dot) {
-      const d = document.createElement("span");
-      d.className = "dot";
-      d.style.background = o.dot;
-      row.append(d);
-    }
-    row.append(document.createTextNode(o.label));
-    if (o.hint) {
-      const h = document.createElement("span");
-      h.className = "prowhint";
-      h.textContent = o.hint;
-      row.append(h);
-    }
-    row.onmouseenter = () => {
-      p.hi = i;
-      render();
-    };
-    row.onclick = () => choosePicker(o);
-    list.append(row);
-  });
-  box.append(list);
-
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent = p.filterable
-    ? "type to filter · ↑↓ move · Enter choose · Esc close"
-    : (p.numbered ? "number picks · " : "") + "↑↓ or nav keys move · Enter choose · Esc close";
-  box.append(hint);
-  wrap.append(box);
-  wrap.onclick = (e) => {
-    if (e.target === wrap) {
-      state.picker = null;
-      render();
-    }
-  };
-  return wrap;
+  const list = el(
+    "div",
+    { class: "picklist" },
+    vis.length ? null : el("div", { class: "pickrow empty" }, "no matches"),
+    ...vis.map((o, i) =>
+      el(
+        "div",
+        {
+          class: "pickrow" + (i === p.hi ? " hi" : "") + (o.action ? " action" : ""),
+          onmouseenter: () => {
+            p.hi = i;
+            render();
+          },
+          onclick: () => choosePicker(o),
+        },
+        p.numbered && i < 9 && el("span", { class: "pnum" }, i + 1),
+        o.checked != null && el("span", { class: "pcheck" }, o.checked ? "✓" : ""),
+        o.dot && el("span", { class: "dot", style: { background: o.dot } }),
+        o.label,
+        o.hint && el("span", { class: "prowhint" }, o.hint)
+      )
+    )
+  );
+  return el(
+    "div",
+    {
+      class: "ask",
+      onclick: (e) => {
+        if (e.target.classList.contains("ask")) {
+          state.picker = null;
+          render();
+        }
+      },
+    },
+    el(
+      "div",
+      { class: "askbox" },
+      el(
+        "label",
+        null,
+        p.title,
+        p.filterable && el("span", { class: "pfilter" }, p.filter ? ` ›  ${p.filter}` : "  (type to filter)")
+      ),
+      list,
+      el(
+        "p",
+        { class: "hint" },
+        p.filterable
+          ? "type to filter · ↑↓ move · Enter choose · Esc close"
+          : (p.numbered ? "number picks · " : "") + "↑↓ or nav keys move · Enter choose · Esc close"
+      )
+    )
+  );
 }
 
 function helpEl() {
-  const wrap = document.createElement("div");
-  wrap.className = "ask help";
-  const box = document.createElement("div");
-  box.className = "askbox wide help";
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent = "press ? or Esc to close";
-  box.append(hint);
-  box.append(keymapEl());
-  wrap.append(box);
-  wrap.onclick = (e) => {
-    if (e.target === wrap) {
-      state.overlay = null;
-      render();
-    }
-  };
-  return wrap;
+  return el(
+    "div",
+    {
+      class: "ask help",
+      onclick: (e) => {
+        if (e.target.classList.contains("ask")) {
+          state.overlay = null;
+          render();
+        }
+      },
+    },
+    el("div", { class: "askbox wide help" }, el("p", { class: "hint" }, "press ? or Esc to close"), keymapEl())
+  );
 }
 
 // two-column dependency view for the focused item (state.deps)
