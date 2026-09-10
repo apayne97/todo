@@ -572,8 +572,9 @@ function visibleRoots() {
   const q = state.search.toLowerCase();
   // the item being edited stays visible regardless of the current filters
   const editing = (r) => state.editing && anyDesc(r, (x) => x.id === state.editing.id);
-  // location filter — date + inbox views only; an untagged task always shows
-  const locOK = (x) => !state.locationFilter || !x._effLocation || x._effLocation === state.locationFilter;
+  // location filter — date + inbox views only. A real filter: a task must carry
+  // (or inherit) this location. Untagged tasks are hidden until you clear it.
+  const locOK = (x) => x._effLocation === state.locationFilter;
   const locFilterActive = state.locationFilter && state.view !== "blocked";
   return roots
     .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
@@ -828,7 +829,10 @@ function renderList(main) {
   if (!roots.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.textContent = "Nothing here.";
+    e.textContent =
+      state.locationFilter && state.view !== "blocked"
+        ? `Nothing tagged ${LOC_LABEL[state.locationFilter] || "@" + state.locationFilter} here. "@" to change, "\\" to clear.`
+        : "Nothing here.";
     main.append(e);
     return;
   }
@@ -1768,7 +1772,7 @@ function render() {
     });
   }
 
-  // location filter — a small always-visible row (untagged tasks show regardless)
+  // location filter — a small always-visible row; "anywhere" = off (shows all)
   const lh = document.createElement("div");
   lh.className = "sidehead";
   lh.textContent = "location";
@@ -1786,7 +1790,7 @@ function render() {
     const b = document.createElement("button");
     b.className = "navbtn tiny" + (state.locationFilter === loc ? " on" : "");
     b.innerHTML = `<span class="nk"></span><span class="plabel">${LOC_LABEL[loc]}</span>`;
-    b.title = `show only @${loc} + untagged tasks`;
+    b.title = `show only @${loc} tasks`;
     b.onclick = () => {
       state.locationFilter = state.locationFilter === loc ? null : loc;
       state.selectedId = null;
@@ -1813,7 +1817,7 @@ function render() {
   }
   if (state.locationFilter) {
     const l = chip((LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕", "filter");
-    l.title = "location filter — untagged tasks still show. Click to clear.";
+    l.title = "location filter — showing only tasks tagged this location. Click to clear.";
     l.onclick = () => {
       state.locationFilter = null;
       render();

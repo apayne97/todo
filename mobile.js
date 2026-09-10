@@ -269,7 +269,7 @@ function rootsFor(view, ignoreFilter) {
   const t = todayISO();
   const pf = ignoreFilter ? null : state.projectFilter;
   const lf = ignoreFilter ? null : state.locationFilter;
-  const locOK = (x) => !x._effLocation || x._effLocation === lf; // untagged always shows
+  const locOK = (x) => x._effLocation === lf; // a real filter — untagged tasks are hidden until you clear it
   return P.buildTrees(state.model.items).filter(
     (r) =>
       !r.done &&

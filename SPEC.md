@@ -250,11 +250,11 @@ project" everywhere; context decides whether that's a drill-in swap or a filter.
 ## Location
 
 Where you'd do a task: **`@home` `@work` `@transit` `@out`** on the task line.
-No tag = "anywhere" (shows regardless of filter). A `location:` line on a
-`### project` block gives every task in that project a location unless the task
-overrides with its own `@tag`; subtasks inherit from their parent.
-`computeStatus` resolves all this into `it._effLocation` (own tag → project →
-inherited); the row shows an `@loc` chip, dashed when inherited.
+No tag = no location. A `location:` line on a `### project` block gives every task
+in that project a location unless the task overrides with its own `@tag`;
+subtasks inherit from their parent. `computeStatus` resolves all this into
+`it._effLocation` (own tag → project → inherited); the row shows an `@loc` chip,
+dashed when inherited.
 
 It's a **filter axis**, separate from the project filter and independent of it:
 
@@ -262,6 +262,10 @@ It's a **filter axis**, separate from the project filter and independent of it:
   (`@` anywhere / home / work / transit / out); `\` clears all filters. `,` sets
   the location on the selected task.
 - **Mobile:** a `📍 location` button next to `⚑ project`, its own sheet.
+- It's a **strict** filter: with `@work` active you see only tasks whose
+  `_effLocation` is `work`. Untagged tasks are hidden until you clear it
+  ("anywhere"). This differs from the project filter, which never has an
+  "untagged" ambiguity.
 - Applies to the **date + inbox views only** (not Blocked/Done/Habits). Tab
   counts stay unfiltered.
 - A task created while a location filter is active inherits that location.
@@ -470,9 +474,10 @@ effective dates (a subtask stays with its parent). Blocked items are hidden.
 
 **Filters** — two independent controls in the top bar: `⚑ project` and
 `📍 location`, each opening its own sheet. Picking one filters Today and Inbox
-(`anyDesc` on `+tag` / `_effLocation`, untagged always shown for location); an
-active-filter chip with `✕` replaces the button. Tab counts stay unfiltered. The
-Habits tab ignores both. Location seeds from the server's `TODO_LOCATION`.
+(`anyDesc` on `+tag` for project; strict `_effLocation === filter` for location —
+untagged tasks are hidden); an active-filter chip with `✕` replaces the button.
+Tab counts stay unfiltered. The Habits tab ignores both. Location seeds from the
+server's `TODO_LOCATION`.
 `projColor` / `allProjects` are ported into `mobile.js`.
 
 **Habits tab** — one card per non-archived habit: `X / Y this week` + bar, current

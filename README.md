@@ -155,12 +155,13 @@ full editable task list for it — buckets by date, "show done" toggle. Inside,
 highlight a card without opening it, use `j`/`k` — then `J`/`K` reorder it (this
 writes an `order:` line and renumbers `⌃N`), or `e`/`r`/`n`/`l`/`C` edit it.
 
-**Location.** Tag a task `@home` / `@work` / `@transit` / `@out` (no tag = do it
-anywhere). A `location: work` line on a project applies to all its tasks. `@` on
-the desktop (or the sidebar `location` row) filters the day/inbox views to one
-context — home tasks vanish while you're at work, and vice-versa; `,` sets a
-task's location. On mobile it's the `📍 location` button. `TODO_LOCATION=work`
-in the server env seeds the filter, so each machine starts in its own context.
+**Location.** Tag a task `@home` / `@work` / `@transit` / `@out`. A `location:
+work` line on a project applies to all its tasks. `@` on the desktop (or the
+sidebar `location` row) filters the day/inbox views to one context — pick `@work`
+and you see **only** `@work` tasks; untagged tasks are hidden until you clear the
+filter ("anywhere"). `,` sets a task's location. On mobile it's the `📍 location`
+button. `TODO_LOCATION=work` in the server env seeds the filter, so each machine
+starts in its own context.
 
 Weekly **habit goals** go in a `## Habits` section:
 
