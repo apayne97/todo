@@ -800,10 +800,7 @@ function renderBlocked(main) {
   state._flat = [];
   const roots = visibleRoots();
   if (!roots.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "Nothing blocked, nothing broken.";
-    main.append(e);
+    main.append(el("div", { class: "empty" }, "Nothing blocked, nothing broken."));
     return;
   }
   const groups = { ready: [], blocked: [], problem: [] };
@@ -815,13 +812,7 @@ function renderBlocked(main) {
   const section = (key, title, hint) => {
     if (!groups[key].length) return;
     main.append(sectionHeadEl(`${title} · ${groups[key].length}`));
-    if (hint) {
-      const h = document.createElement("div");
-      h.className = "note";
-      h.style.padding = "0 16px 4px";
-      h.textContent = hint;
-      main.append(h);
-    }
+    if (hint) main.append(el("div", { class: "note", style: { padding: "0 16px 4px" } }, hint));
     walkRows(groups[key], main);
   };
   section("ready", "ready — blockers cleared");
@@ -837,32 +828,20 @@ function renderDone(main) {
     state.graphFilter === "all" ? true : state.graphFilter === "recurring" ? !!i.repeat : !i.repeat
   );
 
-  const controls = document.createElement("div");
-  controls.className = "controls";
-  for (const [k, lbl] of [["day", "By day (30d)"], ["week", "By week (12w)"]]) {
-    const b = document.createElement("button");
-    b.textContent = lbl;
-    b.className = state.graphMode === k ? "on" : "";
-    b.onclick = () => {
-      state.graphMode = k;
-      render();
-    };
-    controls.append(b);
-  }
-  const spacer = document.createElement("span");
-  spacer.style.flex = "1";
-  controls.append(spacer);
-  for (const [k, lbl] of [["all", "All"], ["oneoff", "One-off"], ["recurring", "Recurring"]]) {
-    const b = document.createElement("button");
-    b.textContent = lbl;
-    b.className = state.graphFilter === k ? "on" : "";
-    b.onclick = () => {
-      state.graphFilter = k;
-      render();
-    };
-    controls.append(b);
-  }
-  main.append(controls);
+  const ctlBtn = (cur, k, lbl, onclick) =>
+    el("button", { class: cur === k ? "on" : null, onclick }, lbl);
+  main.append(
+    el(
+      "div",
+      { class: "controls" },
+      ctlBtn(state.graphMode, "day", "By day (30d)", () => { state.graphMode = "day"; render(); }),
+      ctlBtn(state.graphMode, "week", "By week (12w)", () => { state.graphMode = "week"; render(); }),
+      el("span", { style: { flex: "1" } }),
+      ...[["all", "All"], ["oneoff", "One-off"], ["recurring", "Recurring"]].map(([k, lbl]) =>
+        ctlBtn(state.graphFilter, k, lbl, () => { state.graphFilter = k; render(); })
+      )
+    )
+  );
 
   main.append(graphEl(filtered));
   main.append(statsEl(filtered));
@@ -874,34 +853,13 @@ function renderDone(main) {
     if (!byDay.has(it.doneDate)) byDay.set(it.doneDate, []);
     byDay.get(it.doneDate).push(it);
   }
-  const days = [...byDay.keys()].sort().reverse();
-  for (const day of days) {
-    const h = document.createElement("div");
-    h.className = "dayhead";
-    h.textContent = P.parseISO(day).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-    main.append(h);
+  for (const day of [...byDay.keys()].sort().reverse()) {
+    main.append(
+      el("div", { class: "dayhead" }, P.parseISO(day).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))
+    );
     for (const it of byDay.get(day)) {
       state._flat.push(it.id);
-      const row = document.createElement("div");
-      row.className = "row done" + (it.id === state.selectedId ? " sel" : "");
-      row.style.paddingLeft = "10px";
-      row.onclick = () => selectItem(it.id);
-      const b = document.createElement("button");
-      b.className = "box";
-      b.textContent = "✓";
-      b.title = "mark not done — moves it back to your active list";
-      b.onclick = (e) => {
-        e.stopPropagation();
-        mutate(() => P.toggleDone(state.model, it.id, todayISO()));
-      };
-      row.append(b);
-      const rbody = document.createElement("div");
-      rbody.className = "rowbody";
-      row.append(rbody);
-      const t = document.createElement("span");
-      t.className = "title";
-      t.textContent = it.title;
-      rbody.append(t);
+      const rbody = el("div", { class: "rowbody" }, el("span", { class: "title" }, it.title));
       for (const p of it.projects) {
         const c = chip("+" + p, "proj");
         c.style.borderColor = projColor(p);
@@ -909,11 +867,27 @@ function renderDone(main) {
       }
       if (it.repeat) rbody.append(chip("↻", "rep"));
       if ((it.bumps || 0) > 0) rbody.append(chip("finished despite ⤴" + it.bumps, "bump"));
-      if (it.created) {
-        const age = P.daysBetween(it.doneDate, it.created);
-        if (age >= 7) rbody.append(chip(age + "d to finish", "age"));
-      }
-      main.append(row);
+      if (it.created && P.daysBetween(it.doneDate, it.created) >= 7)
+        rbody.append(chip(P.daysBetween(it.doneDate, it.created) + "d to finish", "age"));
+      main.append(
+        el(
+          "div",
+          { class: "row done" + (it.id === state.selectedId ? " sel" : ""), style: { paddingLeft: "10px" }, onclick: () => selectItem(it.id) },
+          el(
+            "button",
+            {
+              class: "box",
+              title: "mark not done — moves it back to your active list",
+              onclick: (e) => {
+                e.stopPropagation();
+                mutate(() => P.toggleDone(state.model, it.id, todayISO()));
+              },
+            },
+            "✓"
+          ),
+          rbody
+        )
+      );
     }
   }
 }
