@@ -176,9 +176,9 @@ The schedule chip is hidden on rows dated *exactly* today (it'd be on every row)
 but kept when overdue, so "3d over" still shows how far a task has slipped.
 
 **Blocked** groups not-done items into:
-- **ready — blockers cleared** — a `needs:` list that's now fully satisfied *and
-  has no `sched`/`due`*. "This was gated, now give it a date." A dated one is
-  skipped here because Today / Tomorrow / Upcoming already carry it.
+- **ready — blockers cleared** — every not-done item whose `needs:` list is now
+  fully satisfied. Dated ones also show in Today / Upcoming, but they're worth
+  seeing here too — you just cleared their blocker.
 - **blocked** — an unfinished `needs:` task in the way. Shown with 🔒 and the
   blocker's title.
 - **problems** — `needs:` points at a task that no longer exists, or a dependency
@@ -264,20 +264,23 @@ No tag = no location. A `location:` line on a `### project` block gives every ta
 in that project a location unless the task overrides with its own `@tag`;
 subtasks inherit from their parent. `computeStatus` resolves all this into
 `it._effLocation` (own tag → project → inherited); the row shows an `@loc` chip,
-dashed when inherited.
+dashed when inherited. **Habits** can also carry a `location:` line (shown as a
+solid chip).
 
 It's a **filter axis**, separate from the project filter and independent of it:
 
-- **Desktop:** `@` opens a location picker; the sidebar has a `location` row
-  (`@` anywhere / home / work / transit / out); `\` clears all filters. `,` sets
-  the location on the selected task.
+- **Desktop:** `@` opens a location filter picker; the sidebar has a `location`
+  row (`@` anywhere / home / work / transit / out); `\` clears all filters. `L`
+  sets the location on the selected **task**, **project** (Projects view) or
+  **habit** (Habits view).
 - **Mobile:** a `📍 location` button next to `⚑ project`, its own sheet.
-- It's a **strict** filter: with `@work` active you see only tasks whose
-  `_effLocation` is `work`. Untagged tasks are hidden until you clear it
-  ("anywhere"). This differs from the project filter, which never has an
-  "untagged" ambiguity.
-- Applies to the **date + inbox views only** (not Blocked/Done/Habits). Tab
-  counts stay unfiltered.
+- **Tasks** filter strictly: with `@work` active you see only tasks whose
+  `_effLocation` is `work` — untagged tasks are hidden until you clear it.
+  **Habits** filter leniently: an untagged habit always shows; a located one
+  hides unless it matches.
+- Applies to the **date + inbox views** and the **Habits view** (not
+  Blocked/Done/Projects). Task tab counts stay unfiltered; the Habits count
+  follows the filter.
 - A task created while a location filter is active inherits that location.
 - **Per-machine default:** `TODO_LOCATION=work` (env) seeds the filter on load,
   so the work Mac starts filtered to `@work`, the home Mac to `@home`. Still
@@ -297,8 +300,9 @@ best: 6
 ```
 
 `### name` starts a habit; the following lines are the description, except
-`goal: N/week` (the weekly target — bare `goal: N` is also accepted) and
-`best: N` (the all-time-high streak, maintained by the app). Unlike projects, a
+`goal: N/week` (the weekly target — bare `goal: N` is also accepted),
+`best: N` (the all-time-high streak, maintained by the app), an optional
+`location:` (see **Location**), and `archived: <date>`. Unlike projects, a
 habit only exists as a `### block` — there's no tag-only form — and it's never
 pruned.
 

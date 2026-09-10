@@ -380,3 +380,10 @@ test("archived project: block survives, tasks flagged _archivedProject", () => {
   const again = P.parse(P.serialize(m));
   assert.equal(again.projects.find((p) => p.name === "oa").archived, "2026-09-10");
 });
+
+test("habit location round-trips", () => {
+  const src = ["# Todos", "", "## Done", "", "## Habits", "", "### hackerrank", "goal: 3/week", "location: work", ""].join("\n");
+  const m = P.parse(src);
+  assert.equal(m.habits[0].location, "work");
+  assert.equal(P.parse(P.serialize(m)).habits[0].location, "work");
+});

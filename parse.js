@@ -216,7 +216,7 @@ export function parse(text) {
     if (section === "habits") {
       const hh = /^###\s+(.+?)\s*$/.exec(line);
       if (hh) {
-        curHabit = { name: hh[1].trim(), desc: [], meta: [], goal: null, best: 0, archived: null };
+        curHabit = { name: hh[1].trim(), desc: [], meta: [], goal: null, best: 0, archived: null, location: null };
         habits.push(curHabit);
         continue;
       }
@@ -228,6 +228,8 @@ export function parse(text) {
       if (bm) { curHabit.best = Number(bm[1]); continue; }
       const am = /^archived:\s*(\d{4}-\d{2}-\d{2})?\s*$/i.exec(line.trim());
       if (am) { curHabit.archived = am[1] || "yes"; continue; }
+      const hloc = PROJ_LOC_RE.exec(line.trim());
+      if (hloc) { curHabit.location = hloc[1].toLowerCase(); continue; }
       const hkv = /^([A-Za-z][\w-]*):\s+(.*)$/.exec(line.trim());
       if (hkv) curHabit.meta.push([hkv[1], hkv[2]]);
       else curHabit.desc.push(line.trim());
@@ -302,6 +304,7 @@ export function parse(text) {
       goal: h.goal,
       best: h.best || 0,
       archived: h.archived || null,
+      location: h.location || "",
     })),
   };
 }
@@ -413,6 +416,7 @@ export function serialize(model) {
       if ((h.desc || "").trim()) out.push(h.desc.trim());
       if (h.goal != null) out.push(`goal: ${h.goal}/week`);
       if (h.best) out.push(`best: ${h.best}`);
+      if ((h.location || "").trim()) out.push(`location: ${h.location.trim()}`);
       if (h.archived) out.push(`archived: ${/^\d{4}-\d{2}-\d{2}$/.test(h.archived) ? h.archived : ""}`.trimEnd());
       for (const [k, v] of h.meta || []) out.push(`${k}: ${v}`);
       out.push("");

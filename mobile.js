@@ -48,7 +48,10 @@ function recompute() {
 }
 
 function activeHabits() {
-  return (state.model.habits || []).filter((h) => !h.archived);
+  const lf = state.locationFilter;
+  return (state.model.habits || []).filter(
+    (h) => !h.archived && (!lf || !h.location || h.location === lf)
+  );
 }
 
 function cacheSnapshot(text, etag) {
@@ -579,6 +582,12 @@ function habitCardEl(h) {
   name.className = "hname";
   name.textContent = h.name;
   head.append(name);
+  if (h.location) {
+    const c = document.createElement("span");
+    c.className = "chip loc";
+    c.textContent = "@" + h.location;
+    head.append(c);
+  }
   const count = document.createElement("span");
   count.className = "hcount";
   count.textContent = goal ? `${done} / ${goal}` : `${done}`;

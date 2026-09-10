@@ -81,7 +81,7 @@ const DEFAULT_BINDINGS = {
   down: ["k", "ArrowDown"], up: ["j", "ArrowUp"], bottom: ["G"],
   search: ["/"], filterProject: ["P"], filterLocation: ["@"], clearFilters: ["\\"], help: ["?"],
   toggleDone: ["x"], today: ["T"], tomorrow: ["t"], nextWeek: ["w"],
-  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"], setLocation: [","],
+  setSched: ["s"], setDue: ["d"], setRepeat: ["r"], setProject: ["p"], setLocation: ["L"],
   editTitle: ["e", "Enter"], editLine: ["E"], editNote: ["n"], editLink: ["l"], deps: [".", "b"],
   syncDates: ["S"],
   schedMinusDay: ["["], schedPlusDay: ["]"],
@@ -100,7 +100,7 @@ const FIXED_KEYS = [
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
   ["Esc / \\", "leave project drill-in → clear filters → deselect"],
   ["Projects: click / ↵ / o", "open — all of that project's tasks, editable"],
-  ["Projects: j/k then …", "J/K reorder (renumbers ⌃N) · e n l C r edit · a new"],
+  ["Projects: j/k then …", "J/K reorder (renumbers ⌃N) · e n l L C r edit · # archive · a new"],
   ["Habits: j/k then …", "x log a rep · e desc · g goal · r rename · # archive (↵ restores; # again deletes) · a new"],
 ];
 
@@ -558,10 +558,9 @@ function viewMatch(it, view, t, we) {
   if (view === "inbox") return !s && !d && !it.isBlocked;
   if (view === "blocked") {
     if (it.isBlocked || it._dangling.length > 0) return true;
-    // "ready" = a just-unblocked item. Only surface undated ones here; a dated
-    // one already shows in Today / Tomorrow / Upcoming, so listing it again
-    // would just be a duplicate.
-    return isReady(it) && !s && !d;
+    // "ready" = a just-unblocked item (a dated one also shows in Today/Upcoming,
+    // but it's worth seeing here too — you just cleared its blocker).
+    return isReady(it);
   }
   return false;
 }
@@ -1112,17 +1111,19 @@ function selectedHabit() {
 
 function renderHabits(main) {
   const habits = state.model.habits || [];
-  const active = habits.filter((h) => !h.archived);
+  const lf = state.locationFilter;
+  // location filter: a located habit hides unless it matches; untagged always shows
+  const active = habits.filter((h) => !h.archived && (!lf || !h.location || h.location === lf));
   const archived = habits.filter((h) => h.archived);
   const recurring = P.buildTrees(state.model.items).filter(
-    (r) => anyDesc(r, (x) => !x.done && !!x.repeat)
+    (r) => anyDesc(r, (x) => !x.done && !!x.repeat) && (!lf || anyDesc(r, (x) => x._effLocation === lf))
   );
   state._flat = [];
 
   const hint = document.createElement("div");
   hint.className = "dayhead";
   hint.textContent =
-    "weekly goals · j/k select, then: x log one now · e description · g goal · r rename · # archive · a new";
+    "weekly goals · j/k select, then: x log · e description · g goal · L location · r rename · # archive · a new";
   main.append(hint);
 
   if (!active.length) {
@@ -1187,6 +1188,7 @@ function habitCardEl(h) {
   name.className = "pname";
   name.textContent = h.name;
   head.append(name);
+  if (h.location) head.append(chip("@" + h.location, "loc"));
   const counts = document.createElement("span");
   counts.className = "pcounts";
   counts.textContent = goal
@@ -1323,7 +1325,7 @@ function renderProjects(main) {
   const hint = document.createElement("div");
   hint.className = "dayhead";
   hint.textContent =
-    "click / ↵ open · j/k select, then: J/K reorder · e desc · r rename · n info · l link · C color · # archive · a new";
+    "click / ↵ open · j/k select, then: J/K reorder · e desc · r rename · n info · l link · L location · C color · # archive · a new";
   main.append(hint);
 
   if (!rows.length && !archived.length) {
@@ -2608,15 +2610,28 @@ function openLocationFilter() {
   });
 }
 
-function openSetLocation(sel) {
+// picker of the 4 locations + "none"; `set(value)` gets "" or a location name
+function pickLocation(title, current, set) {
   const opts = [
     { value: "", label: "(anywhere — no location)" },
     ...P.LOCATIONS.map((l) => ({ value: l, label: LOC_LABEL[l] })),
   ];
-  const cur = opts.findIndex((o) => o.value === (sel.location || ""));
-  openPicker("Set location", opts, cur < 0 ? 0 : cur, (v) => {
-    mutate(() => (sel.location = v || null));
-  });
+  const cur = opts.findIndex((o) => o.value === (current || ""));
+  openPicker(title, opts, cur < 0 ? 0 : cur, (v) => set(v));
+}
+
+function openSetLocation(sel) {
+  pickLocation("Set location", sel.location, (v) => mutate(() => (sel.location = v || null)));
+}
+
+function openSetProjectLocation(name) {
+  pickLocation(`${name} — location`, projectEntry(name)?.location, (v) =>
+    mutate(() => (ensureProjectEntry(name).location = v || ""))
+  );
+}
+
+function openSetHabitLocation(h) {
+  pickLocation(`${h.name} — location`, h.location, (v) => mutate(() => (h.location = v || "")));
 }
 
 function openSetProject(sel) {
@@ -2816,17 +2831,18 @@ document.addEventListener("keydown", (e) => {
       return newHabit();
     }
     const h = selectedHabit();
-    if (h && ["x", "Enter", "e", "g", "r", "#", "Delete"].includes(k)) {
+    if (h && ["x", "Enter", "e", "g", "L", "r", "#", "Delete"].includes(k)) {
       e.preventDefault();
       if (h.archived) {
         // progressive delete: ↵/x restores, # (again) purges for good
         if (k === "Enter" || k === "x") return restoreHabit(h);
         if (k === "#" || k === "Delete") return deleteHabit(h);
-        return; // e/g/r don't apply to an archived habit
+        return; // e/g/r/L don't apply to an archived habit
       }
       if (k === "x" || k === "Enter") return logHabit(h);
       if (k === "e") return editHabitDesc(h);
       if (k === "g") return editHabitGoal(h);
+      if (k === "L") return openSetHabitLocation(h);
       if (k === "r") return renameHabit(h);
       return archiveHabit(h); // # / Delete — soft, reversible
     }
@@ -2853,7 +2869,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   // Projects view: contextual keys (not rebindable)
-  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "C", "r", "a", "J", "K", "#", "Delete"].includes(k)) {
+  if (state.view === "projects" && !state.projectView && ["e", "Enter", "o", "n", "l", "L", "C", "r", "a", "J", "K", "#", "Delete"].includes(k)) {
     e.preventDefault();
     if (k === "a")
       return newProjectName((name) => {
@@ -2865,7 +2881,8 @@ document.addEventListener("keydown", (e) => {
     const arch = projectEntry(state.selectedId)?.archived;
     if (k === "#" || k === "Delete") return arch ? restoreProject(state.selectedId) : archiveProject(state.selectedId);
     if (k === "Enter" || k === "o") return openProjectDetail(state.selectedId);
-    if (arch) return; // an archived project — only ↵ (open) and # (restore) apply
+    if (k === "L") return openSetProjectLocation(state.selectedId);
+    if (arch) return; // an archived project — only ↵ (open), L, # (restore) apply
     if (k === "J") return reorderProject(state.selectedId, -1);
     if (k === "K") return reorderProject(state.selectedId, 1);
     if (k === "n") return editProjectMeta(state.selectedId);
