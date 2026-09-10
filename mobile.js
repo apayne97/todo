@@ -2,6 +2,7 @@
 // todos.md + /todos API the desktop app uses. Shares parse.js. Keyboard-free.
 import * as P from "./parse.js";
 import * as M from "./model.js";
+import { el } from "./dom.js";
 
 const API = "/todos";
 const SNAP = "todo.mobile.snapshot";
@@ -297,29 +298,30 @@ function render() {
   app.innerHTML = "";
 
   if (!state.loaded) {
-    const b = document.createElement("div");
-    b.className = "boot";
-    b.textContent = state.offline ? "offline — no cached data yet" : "loading…";
-    app.append(b);
+    app.append(el("div", { class: "boot" }, state.offline ? "offline — no cached data yet" : "loading…"));
     return;
   }
 
   app.append(topEl());
-
-  const main = document.createElement("main");
+  const main = el("main");
   paintList(main);
   app.append(main);
 
   if (state.view !== "habits") {
-    const fab = document.createElement("button");
-    fab.className = "fab";
-    fab.textContent = "+";
-    fab.setAttribute("aria-label", "add task");
-    fab.onclick = () => {
-      state.adding = true;
-      render();
-    };
-    app.append(fab);
+    app.append(
+      el(
+        "button",
+        {
+          class: "fab",
+          "aria-label": "add task",
+          onclick: () => {
+            state.adding = true;
+            render();
+          },
+        },
+        "+"
+      )
+    );
   }
 
   if (state.undo) app.append(toastEl(state.undo.label, "Undo", doUndo));
@@ -487,18 +489,23 @@ function paintList(main) {
   const roots = rootsFor(state.view);
 
   if (!roots.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
     const filt = [
       state.projectFilter && `+${state.projectFilter}`,
       state.locationFilter && `@${state.locationFilter}`,
-    ].filter(Boolean).join(" · ");
-    e.textContent = filt
-      ? `Nothing in ${filt} ${state.view === "today" ? "due today" : "here"}.`
-      : state.view === "today"
-        ? "Nothing due today. 🎉"
-        : "Inbox is empty.";
-    main.append(e);
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    main.append(
+      el(
+        "div",
+        { class: "empty" },
+        filt
+          ? `Nothing in ${filt} ${state.view === "today" ? "due today" : "here"}.`
+          : state.view === "today"
+            ? "Nothing due today. 🎉"
+            : "Inbox is empty."
+      )
+    );
     return;
   }
 
@@ -524,10 +531,7 @@ function paintList(main) {
 function paintHabits(main) {
   const habits = activeHabits();
   if (!habits.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "No habits. Set them up on the desktop app.";
-    main.append(e);
+    main.append(el("div", { class: "empty" }, "No habits. Set them up on the desktop app."));
     return;
   }
   for (const h of habits) main.append(habitCardEl(h));
@@ -602,186 +606,140 @@ function logRep(h) {
 }
 
 function sechead(text) {
-  const h = document.createElement("div");
-  h.className = "sechead";
-  h.textContent = text;
-  return h;
+  return el("div", { class: "sechead" }, text);
 }
 
+const chip = (text, cls) => el("span", { class: "chip " + (cls || "") }, text);
+
 function cardEl(it) {
-  const card = document.createElement("div");
-  card.className = "card";
-
-  const row = document.createElement("div");
-  row.className = "row";
-
   const kids = (it.children || []).filter((c) => !c._virtual);
   const openKids = kids.filter((c) => !c.done);
-
-  const check = document.createElement("button");
-  check.className = "check";
-  check.textContent = "✓";
-  check.setAttribute("aria-label", "complete");
-  check.onclick = (e) => {
-    e.stopPropagation();
-    complete(it);
-  };
-  row.append(check);
-
-  const body = document.createElement("div");
-  body.className = "rowbody";
-  const title = document.createElement("div");
-  title.className = "title";
-  title.textContent = it.title || "(untitled)";
-  body.append(title);
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
   const fd = firstDate(it);
-  if (fd && (state.view !== "today" || fd < todayISO())) {
-    const c = document.createElement("span");
-    c.className = "chip" + (fd < todayISO() ? " late" : "");
-    c.textContent = relDay(fd);
-    meta.append(c);
-  }
-  for (const p of it.projects) {
-    const c = document.createElement("span");
-    c.className = "chip proj";
-    c.textContent = "+" + p;
-    meta.append(c);
-  }
-  if (it._effLocation) {
-    const c = document.createElement("span");
-    c.className = "chip loc" + (it.location ? "" : " inherited");
-    c.textContent = "@" + it._effLocation;
-    meta.append(c);
-  }
-  if (it.repeat) {
-    const c = document.createElement("span");
-    c.className = "chip rep";
-    c.textContent = "↻";
-    meta.append(c);
-  }
-  if (kids.length) {
-    const c = document.createElement("span");
-    c.className = "chip sub";
-    c.textContent = `${kids.length - openKids.length}/${kids.length}`;
-    meta.append(c);
-  }
-  if (meta.childNodes.length) body.append(meta);
-  row.append(body);
+  const late = fd && fd < todayISO();
+
+  const meta = el(
+    "div",
+    { class: "meta" },
+    fd && (state.view !== "today" || late) && chip(relDay(fd), late ? "late" : ""),
+    ...it.projects.map((p) => chip("+" + p, "proj")),
+    it._effLocation && chip("@" + it._effLocation, "loc" + (it.location ? "" : " inherited")),
+    it.repeat && chip("↻", "rep"),
+    kids.length > 0 && chip(`${kids.length - openKids.length}/${kids.length}`, "sub")
+  );
 
   const hasDetail = it.notes.length || it.link || kids.length;
-  const caret = document.createElement("div");
-  caret.className = "caret";
-  caret.textContent = state.expanded === it.id ? "▾" : hasDetail ? "▸" : "⋯";
-  row.append(caret);
 
-  row.onclick = () => {
-    state.expanded = state.expanded === it.id ? null : it.id;
-    render();
-  };
-  card.append(row);
-
-  if (state.expanded === it.id) card.append(detailEl(it, kids));
-  return card;
+  return el(
+    "div",
+    { class: "card" },
+    el(
+      "div",
+      {
+        class: "row",
+        onclick: () => {
+          state.expanded = state.expanded === it.id ? null : it.id;
+          render();
+        },
+      },
+      el(
+        "button",
+        {
+          class: "check",
+          "aria-label": "complete",
+          onclick: (e) => {
+            e.stopPropagation();
+            complete(it);
+          },
+        },
+        "✓"
+      ),
+      el(
+        "div",
+        { class: "rowbody" },
+        el("div", { class: "title" }, it.title || "(untitled)"),
+        meta.childNodes.length ? meta : null
+      ),
+      el("div", { class: "caret" }, state.expanded === it.id ? "▾" : hasDetail ? "▸" : "⋯")
+    ),
+    state.expanded === it.id && detailEl(it, kids)
+  );
 }
 
 function detailEl(it, kids) {
-  const d = document.createElement("div");
-  d.className = "detail";
+  const act = (label, fn, cls) =>
+    el(
+      "button",
+      {
+        class: "act " + (cls || ""),
+        onclick: (e) => {
+          e.stopPropagation();
+          fn();
+        },
+      },
+      label
+    );
 
-  for (const n of it.notes) {
-    const p = document.createElement("div");
-    p.className = "note";
-    p.textContent = n;
-    d.append(p);
-  }
-
-  if (it.link) {
-    const a = document.createElement("a");
-    a.className = "linkbtn";
-    a.href = it.link;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.textContent = "↗ " + it.link.replace(/^https?:\/\//, "");
-    d.append(a);
-  }
-
-  if (kids.length) {
-    const wrap = document.createElement("div");
-    wrap.className = "subs";
-    for (const c of kids) {
-      const srow = document.createElement("div");
-      srow.className = "sub";
-      const sc = document.createElement("button");
-      sc.className = "check" + (c.done ? " done" : "");
-      sc.textContent = "✓";
-      sc.onclick = (e) => {
-        e.stopPropagation();
-        c.done ? reopen(c) : complete(c);
-      };
-      srow.append(sc);
-      const st = document.createElement("span");
-      st.className = "stitle" + (c.done ? " sdone" : "");
-      st.textContent = c.title || "(untitled)";
-      srow.append(st);
-      wrap.append(srow);
-    }
-    d.append(wrap);
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "actions";
-
-  const mk = (label, fn, cls = "") => {
-    const b = document.createElement("button");
-    b.className = "act " + cls;
-    b.textContent = label;
-    b.onclick = (e) => {
+  const dateInput = el("input", {
+    type: "date",
+    min: todayISO(),
+    value: it.sched || it.due || todayISO(),
+    onclick: (e) => e.stopPropagation(),
+    onchange: (e) => {
       e.stopPropagation();
-      fn();
-    };
-    return b;
-  };
+      if (dateInput.value) snooze(it, dateInput.value);
+    },
+  });
 
-  actions.append(mk("Tomorrow", () => snooze(it, "tomorrow")));
-  actions.append(mk("Next week", () => snooze(it, "nextweek")));
-
-  const pick = document.createElement("label");
-  pick.className = "act pick";
-  pick.textContent = "Pick day";
-  const dateInput = document.createElement("input");
-  dateInput.type = "date";
-  dateInput.min = todayISO();
-  dateInput.value = it.sched || it.due || todayISO();
-  dateInput.onclick = (e) => e.stopPropagation();
-  dateInput.onchange = (e) => {
-    e.stopPropagation();
-    if (dateInput.value) snooze(it, dateInput.value);
-  };
-  pick.append(dateInput);
-  actions.append(pick);
-
-  d.append(actions);
-  return d;
+  return el(
+    "div",
+    { class: "detail" },
+    ...it.notes.map((n) => el("div", { class: "note" }, n)),
+    it.link &&
+      el(
+        "a",
+        { class: "linkbtn", href: it.link, target: "_blank", rel: "noopener" },
+        "↗ " + it.link.replace(/^https?:\/\//, "")
+      ),
+    kids.length > 0 &&
+      el(
+        "div",
+        { class: "subs" },
+        ...kids.map((c) =>
+          el(
+            "div",
+            { class: "sub" },
+            el(
+              "button",
+              {
+                class: "check" + (c.done ? " done" : ""),
+                onclick: (e) => {
+                  e.stopPropagation();
+                  c.done ? reopen(c) : complete(c);
+                },
+              },
+              "✓"
+            ),
+            el("span", { class: "stitle" + (c.done ? " sdone" : "") }, c.title || "(untitled)")
+          )
+        )
+      ),
+    el(
+      "div",
+      { class: "actions" },
+      act("Tomorrow", () => snooze(it, "tomorrow")),
+      act("Next week", () => snooze(it, "nextweek")),
+      el("label", { class: "act pick" }, "Pick day", dateInput)
+    )
+  );
 }
 
 function toastEl(msg, actionLabel, actionFn) {
-  const t = document.createElement("div");
-  t.className = "toast";
-  const m = document.createElement("span");
-  m.className = "msg";
-  m.textContent = msg;
-  t.append(m);
-  if (actionLabel) {
-    const b = document.createElement("button");
-    b.className = "undo";
-    b.textContent = actionLabel;
-    b.onclick = actionFn;
-    t.append(b);
-  }
-  return t;
+  return el(
+    "div",
+    { class: "toast" },
+    el("span", { class: "msg" }, msg),
+    actionLabel && el("button", { class: "undo", onclick: actionFn }, actionLabel)
+  );
 }
 
 function addSheetEl() {
