@@ -1072,84 +1072,63 @@ function renderHabits(main) {
 }
 
 function archivedHabitRow(h) {
-  const row = document.createElement("div");
-  row.className = "harch" + ("habit:" + h.name === state.selectedId ? " sel" : "");
-  row.onclick = () => selectItem("habit:" + h.name);
-  const name = document.createElement("span");
-  name.className = "harchname";
-  name.textContent = h.name;
-  row.append(name);
-  const meta = document.createElement("span");
-  meta.className = "harchmeta";
   const when = /^\d{4}-\d{2}-\d{2}$/.test(h.archived) ? ` · archived ${relDay(h.archived)}` : "";
-  meta.textContent =
-    `best ${h._best || h.best || 0}w · ${h._total || 0} all-time${when}`;
-  row.append(meta);
-  return row;
+  return el(
+    "div",
+    {
+      class: "harch" + ("habit:" + h.name === state.selectedId ? " sel" : ""),
+      onclick: () => selectItem("habit:" + h.name),
+    },
+    el("span", { class: "harchname" }, h.name),
+    el("span", { class: "harchmeta" }, `best ${h._best || h.best || 0}w · ${h._total || 0} all-time${when}`)
+  );
 }
 
 function habitCardEl(h) {
   const goal = h._goal || 0;
   const done = h._thisWeek || 0;
-  const card = document.createElement("div");
-  card.className = "pcard hcard" + ("habit:" + h.name === state.selectedId ? " sel" : "");
-  card.onclick = () => selectItem("habit:" + h.name);
-
-  const head = document.createElement("div");
-  head.className = "phead";
-  const dot = document.createElement("span");
-  dot.className = "dot";
-  dot.style.background = projColor(h.name);
-  head.append(dot);
-  const name = document.createElement("span");
-  name.className = "pname";
-  name.textContent = h.name;
-  head.append(name);
-  if (h.location) head.append(chip("@" + h.location, "loc"));
-  const counts = document.createElement("span");
-  counts.className = "pcounts";
-  counts.textContent = goal
-    ? `${done} / ${goal} this week${done >= goal ? "  ✓" : ""}`
-    : `${done} this week · no goal (g)`;
-  head.append(counts);
-  card.append(head);
-
-  if (h.desc) {
-    const d = document.createElement("div");
-    d.className = "pdesc";
-    d.textContent = h.desc;
-    card.append(d);
-  }
-
-  if (goal) {
-    const bar = document.createElement("div");
-    bar.className = "hbar";
-    const fill = document.createElement("span");
-    fill.style.width = Math.min(100, Math.round((done / goal) * 100)) + "%";
-    if (done >= goal) fill.classList.add("met");
-    bar.append(fill);
-    card.append(bar);
-  }
-
-  const streak = document.createElement("div");
-  streak.className = "hstreak";
-  streak.textContent =
-    `streak ${h._streak || 0}w · best ${h._best || 0}w · ${h._total || 0} all-time`;
-  card.append(streak);
-
-  const spark = document.createElement("div");
-  spark.className = "hspark";
-  spark.title = "last 8 weeks";
-  for (const wk of h._spark || []) {
-    const cell = document.createElement("span");
-    cell.className =
-      "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : "");
-    cell.title = `${wk.n} rep${wk.n === 1 ? "" : "s"}${wk.current ? " (this week)" : ""}`;
-    spark.append(cell);
-  }
-  card.append(spark);
-
-  return card;
+  return el(
+    "div",
+    {
+      class: "pcard hcard" + ("habit:" + h.name === state.selectedId ? " sel" : ""),
+      onclick: () => selectItem("habit:" + h.name),
+    },
+    el(
+      "div",
+      { class: "phead" },
+      el("span", { class: "dot", style: { background: projColor(h.name) } }),
+      el("span", { class: "pname" }, h.name),
+      h.location && chip("@" + h.location, "loc"),
+      el(
+        "span",
+        { class: "pcounts" },
+        goal
+          ? `${done} / ${goal} this week${done >= goal ? "  ✓" : ""}`
+          : `${done} this week · no goal (g)`
+      )
+    ),
+    h.desc && el("div", { class: "pdesc" }, h.desc),
+    goal > 0 &&
+      el(
+        "div",
+        { class: "hbar" },
+        el("span", {
+          class: done >= goal ? "met" : null,
+          style: { width: Math.min(100, Math.round((done / goal) * 100)) + "%" },
+        })
+      ),
+    el("div", { class: "hstreak" }, `streak ${h._streak || 0}w · best ${h._best || 0}w · ${h._total || 0} all-time`),
+    el(
+      "div",
+      { class: "hspark", title: "last 8 weeks" },
+      ...(h._spark || []).map((wk) =>
+        el("span", {
+          class: "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : ""),
+          title: `${wk.n} rep${wk.n === 1 ? "" : "s"}${wk.current ? " (this week)" : ""}`,
+        })
+      )
+    )
+  );
 }
 
 function logHabit(h) {
@@ -1234,108 +1213,82 @@ function deleteHabit(h) {
 
 // ---------- projects view ----------
 
+function projectCardEl(p, i) {
+  return el(
+    "div",
+    { class: "pcard" + (p.name === state.selectedId ? " sel" : ""), onclick: () => openProjectDetail(p.name) },
+    el(
+      "div",
+      { class: "phead" },
+      el("span", { class: "pcardnum", title: i < 9 ? `⌃${i + 1} filters/opens this project` : null }, i < 9 ? `⌃${i + 1}` : ""),
+      el("span", { class: "dot", style: { background: projColor(p.name) } }),
+      el("button", { class: "pname", title: "open this project", onclick: () => openProjectDetail(p.name) }, p.name),
+      p.location && chip("@" + p.location, "loc"),
+      el(
+        "span",
+        { class: "pcounts" },
+        `${p.open} open` +
+          (p.blocked ? ` · ${p.blocked} blocked` : "") +
+          ` · ${p.done} done` +
+          (p.nextDue ? ` · next due ${relDay(p.nextDue)}` : "")
+      )
+    ),
+    el(
+      "div",
+      {
+        class: "pdesc" + (p.desc ? "" : " empty"),
+        onclick: (e) => {
+          e.stopPropagation();
+          state.selectedId = p.name;
+          editProjectDesc(p.name);
+        },
+      },
+      p.desc || "no description — press e"
+    ),
+    p.link && el("div", { class: "plink" }, linkChip(p.link)),
+    p.meta.length > 0 &&
+      el(
+        "dl",
+        { class: "pmeta" },
+        ...p.meta.flatMap(([k, v]) => [el("dt", null, k), el("dd", null, v)])
+      )
+  );
+}
+
+function archivedProjectRow(p) {
+  const open = state.model.items.filter((it) => !it.done && it.projects.includes(p.name)).length;
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(p.archived) ? ` · archived ${relDay(p.archived)}` : "";
+  return el(
+    "div",
+    { class: "parch" + (p.name === state.selectedId ? " sel" : ""), onclick: () => openProjectDetail(p.name) },
+    el("span", { class: "parchname" }, p.name),
+    el("span", { class: "parchmeta" }, `${open} open${when}`)
+  );
+}
+
 function renderProjects(main) {
   const rows = projectSummaries();
   const archived = (state.model.projects || []).filter((p) => p.archived);
   state._flat = [...rows.map((p) => p.name), ...archived.map((p) => p.name)];
 
-  const hint = document.createElement("div");
-  hint.className = "dayhead";
-  hint.textContent =
-    "click / ↵ open · j/k select, then: J/K reorder · e desc · r rename · n info · l link · L location · C color · # archive · a new";
-  main.append(hint);
+  main.append(
+    el(
+      "div",
+      { class: "dayhead" },
+      "click / ↵ open · j/k select, then: J/K reorder · e desc · r rename · n info · l link · L location · C color · # archive · a new"
+    )
+  );
 
   if (!rows.length && !archived.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "No projects yet. Press a to add one, or tag a task with +name.";
-    main.append(e);
+    main.append(el("div", { class: "empty" }, "No projects yet. Press a to add one, or tag a task with +name."));
     return;
   }
 
-  rows.forEach((p, i) => {
-    const card = document.createElement("div");
-    card.className = "pcard" + (p.name === state.selectedId ? " sel" : "");
-    card.onclick = () => openProjectDetail(p.name);
-
-    const head = document.createElement("div");
-    head.className = "phead";
-    const num = document.createElement("span");
-    num.className = "pcardnum";
-    num.textContent = i < 9 ? `⌃${i + 1}` : "";
-    if (i < 9) num.title = `⌃${i + 1} filters/opens this project`;
-    head.append(num);
-    const dot = document.createElement("span");
-    dot.className = "dot";
-    dot.style.background = projColor(p.name);
-    head.append(dot);
-    const name = document.createElement("button");
-    name.className = "pname";
-    name.textContent = p.name;
-    name.title = "open this project";
-    name.onclick = () => openProjectDetail(p.name);
-    head.append(name);
-    if (p.location) head.append(chip("@" + p.location, "loc"));
-    const counts = document.createElement("span");
-    counts.className = "pcounts";
-    counts.textContent =
-      `${p.open} open` +
-      (p.blocked ? ` · ${p.blocked} blocked` : "") +
-      ` · ${p.done} done` +
-      (p.nextDue ? ` · next due ${relDay(p.nextDue)}` : "");
-    head.append(counts);
-    card.append(head);
-
-    const desc = document.createElement("div");
-    desc.className = "pdesc" + (p.desc ? "" : " empty");
-    desc.textContent = p.desc || "no description — press e";
-    desc.onclick = (e) => {
-      e.stopPropagation();
-      state.selectedId = p.name;
-      editProjectDesc(p.name);
-    };
-    card.append(desc);
-
-    if (p.link) {
-      const lw = document.createElement("div");
-      lw.className = "plink";
-      lw.append(linkChip(p.link));
-      card.append(lw);
-    }
-
-    if (p.meta.length) {
-      const meta = document.createElement("dl");
-      meta.className = "pmeta";
-      for (const [k, v] of p.meta) {
-        const dt = document.createElement("dt");
-        dt.textContent = k;
-        const dd = document.createElement("dd");
-        dd.textContent = v;
-        meta.append(dt, dd);
-      }
-      card.append(meta);
-    }
-    main.append(card);
-  });
+  rows.forEach((p, i) => main.append(projectCardEl(p, i)));
 
   if (archived.length) {
     main.append(sectionHeadEl(`archived · ${archived.length}  ·  ↵ open · # restore`));
-    for (const p of archived) {
-      const open = state.model.items.filter((it) => !it.done && it.projects.includes(p.name)).length;
-      const row = document.createElement("div");
-      row.className = "parch" + (p.name === state.selectedId ? " sel" : "");
-      row.onclick = () => openProjectDetail(p.name);
-      const nm = document.createElement("span");
-      nm.className = "parchname";
-      nm.textContent = p.name;
-      row.append(nm);
-      const meta = document.createElement("span");
-      meta.className = "parchmeta";
-      const when = /^\d{4}-\d{2}-\d{2}$/.test(p.archived) ? ` · archived ${relDay(p.archived)}` : "";
-      meta.textContent = `${open} open${when}`;
-      row.append(meta);
-      main.append(row);
-    }
+    for (const p of archived) main.append(archivedProjectRow(p));
   }
 }
 

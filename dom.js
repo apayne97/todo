@@ -10,7 +10,9 @@
 // `onX` function → event handler, anything that's a real property on the node
 // (value, type, rows, href, disabled, title, …) is set as a property, everything
 // else via setAttribute. children: nodes, strings, numbers, arrays (flattened);
-// null / undefined / false / true are skipped so `cond && el(...)` works.
+// null / undefined / false / true are skipped so `cond && el(...)` works — but a
+// number 0 IS rendered (React footgun), so write `arr.length > 0 && el(...)`, not
+// `arr.length && el(...)`.
 
 function addKids(n, kids) {
   for (const c of kids) {
