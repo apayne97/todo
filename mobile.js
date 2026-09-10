@@ -335,150 +335,151 @@ const LOC_LABEL = { home: "🏠 home", work: "🏢 work", transit: "🚌 in tran
 
 function filterSheetEl() {
   const isLoc = state.filterOpen === "location";
-  const wrap = document.createElement("div");
-  wrap.className = "sheet-wrap";
-  wrap.onclick = (e) => {
-    if (e.target === wrap) {
-      state.filterOpen = false;
-      render();
-    }
-  };
-  const sheet = document.createElement("div");
-  sheet.className = "sheet";
-  const h = document.createElement("h2");
-  h.textContent = isLoc ? "Filter by location" : "Filter by project";
-  sheet.append(h);
-
   const pick = (v) => {
     if (isLoc) state.locationFilter = v;
     else state.projectFilter = v;
     state.filterOpen = false;
     render();
   };
-
   const cur = isLoc ? state.locationFilter : state.projectFilter;
-  const all = document.createElement("button");
-  all.className = "projrow" + (cur ? "" : " on");
-  all.textContent = isLoc ? "Anywhere" : "All tasks";
-  all.onclick = () => pick(null);
-  sheet.append(all);
-
   const opts = isLoc ? P.LOCATIONS : allProjects();
-  for (const name of opts) {
-    const row = document.createElement("button");
-    row.className = "projrow" + (cur === name ? " on" : "");
-    if (isLoc) {
-      row.textContent = LOC_LABEL[name] || name;
-    } else {
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.style.background = projColor(name);
-      row.append(dot, document.createTextNode(name));
-    }
-    row.onclick = () => pick(name);
-    sheet.append(row);
-  }
 
-  wrap.append(sheet);
+  const wrap = el(
+    "div",
+    {
+      class: "sheet-wrap",
+      onclick: (e) => {
+        if (e.target === wrap) {
+          state.filterOpen = false;
+          render();
+        }
+      },
+    },
+    el(
+      "div",
+      { class: "sheet" },
+      el("h2", null, isLoc ? "Filter by location" : "Filter by project"),
+      el(
+        "button",
+        { class: "projrow" + (cur ? "" : " on"), onclick: () => pick(null) },
+        isLoc ? "Anywhere" : "All tasks",
+      ),
+      opts.map((name) =>
+        el(
+          "button",
+          { class: "projrow" + (cur === name ? " on" : ""), onclick: () => pick(name) },
+          isLoc
+            ? LOC_LABEL[name] || name
+            : [el("span", { class: "dot", style: { background: projColor(name) } }), name],
+        ),
+      ),
+    ),
+  );
   return wrap;
 }
 
 function topEl() {
-  const top = document.createElement("div");
-  top.className = "top";
+  const syncing = state.saving || state.dirty;
+  const sync = el(
+    "span",
+    null,
+    syncing && el("span", { class: "dotpulse" }),
+    syncing
+      ? state.offline
+        ? "waiting to sync"
+        : "saving…"
+      : !state.offline
+        ? "synced"
+        : null,
+  );
 
-  const tabs = document.createElement("div");
-  tabs.className = "tabs";
-  for (const [key, label] of VIEWS) {
-    const b = document.createElement("button");
-    b.className = "tab" + (state.view === key ? " on" : "");
-    const n = countFor(key);
-    b.innerHTML = `${label}${n ? `<span class="n">${n}</span>` : ""}`;
-    b.onclick = () => {
-      state.view = key;
-      state.expanded = null;
-      render();
-    };
-    tabs.append(b);
-  }
-  top.append(tabs);
-
-  const status = document.createElement("div");
-  status.className = "statusline";
-  const sync = document.createElement("span");
-  if (state.saving || state.dirty) {
-    const d = document.createElement("span");
-    d.className = "dotpulse";
-    sync.append(d);
-    sync.append(document.createTextNode(state.offline ? "waiting to sync" : "saving…"));
-  } else if (!state.offline) {
-    sync.textContent = "synced";
-  }
-  status.append(sync);
-
-  if (state.view !== "habits") {
-    const controls = document.createElement("span");
-    controls.className = "filterctls";
-
-    // project
-    if (state.projectFilter) {
-      const chip = document.createElement("button");
-      chip.className = "filterchip";
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.style.background = projColor(state.projectFilter);
-      chip.append(dot, document.createTextNode(state.projectFilter + " ✕"));
-      chip.onclick = () => {
-        state.projectFilter = null;
-        render();
-      };
-      controls.append(chip);
-    } else {
-      const b = document.createElement("button");
-      b.className = "filterbtn";
-      b.textContent = "⚑ project";
-      b.onclick = () => {
-        state.filterOpen = "project";
-        render();
-      };
-      controls.append(b);
-    }
-
-    // location
-    if (state.locationFilter) {
-      const chip = document.createElement("button");
-      chip.className = "filterchip";
-      chip.textContent = (LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕";
-      chip.onclick = () => {
-        state.locationFilter = null;
-        render();
-      };
-      controls.append(chip);
-    } else {
-      const b = document.createElement("button");
-      b.className = "filterbtn";
-      b.textContent = "📍 location";
-      b.onclick = () => {
-        state.filterOpen = "location";
-        render();
-      };
-      controls.append(b);
-    }
-
-    status.append(controls);
-  }
-  top.append(status);
-
-  if (state.offline) {
-    const ban = document.createElement("div");
-    ban.className = "banner";
-    ban.textContent = state.dirty
-      ? "Offline — your change is saved on this phone and will sync when you reconnect."
-      : "Offline — showing the last version. Changes won't sync until you reconnect.";
-    top.append(ban);
-  }
-
-  return top;
+  return el(
+    "div",
+    { class: "top" },
+    el(
+      "div",
+      { class: "tabs" },
+      VIEWS.map(([key, label]) => {
+        const n = countFor(key);
+        return el("button", {
+          class: "tab" + (state.view === key ? " on" : ""),
+          html: `${label}${n ? `<span class="n">${n}</span>` : ""}`,
+          onclick: () => {
+            state.view = key;
+            state.expanded = null;
+            render();
+          },
+        });
+      }),
+    ),
+    el(
+      "div",
+      { class: "statusline" },
+      sync,
+      state.view !== "habits" &&
+        el(
+          "span",
+          { class: "filterctls" },
+          // project
+          state.projectFilter
+            ? el(
+                "button",
+                {
+                  class: "filterchip",
+                  onclick: () => {
+                    state.projectFilter = null;
+                    render();
+                  },
+                },
+                el("span", { class: "dot", style: { background: projColor(state.projectFilter) } }),
+                state.projectFilter + " ✕",
+              )
+            : el(
+                "button",
+                {
+                  class: "filterbtn",
+                  onclick: () => {
+                    state.filterOpen = "project";
+                    render();
+                  },
+                },
+                "⚑ project",
+              ),
+          // location
+          state.locationFilter
+            ? el(
+                "button",
+                {
+                  class: "filterchip",
+                  onclick: () => {
+                    state.locationFilter = null;
+                    render();
+                  },
+                },
+                (LOC_LABEL[state.locationFilter] || state.locationFilter) + " ✕",
+              )
+            : el(
+                "button",
+                {
+                  class: "filterbtn",
+                  onclick: () => {
+                    state.filterOpen = "location";
+                    render();
+                  },
+                },
+                "📍 location",
+              ),
+        ),
+    ),
+    state.offline &&
+      el(
+        "div",
+        { class: "banner" },
+        state.dirty
+          ? "Offline — your change is saved on this phone and will sync when you reconnect."
+          : "Offline — showing the last version. Changes won't sync until you reconnect.",
+      ),
+  );
 }
 
 function paintList(main) {
@@ -541,59 +542,32 @@ function habitCardEl(h) {
   const goal = h._goal || 0;
   const done = h._thisWeek || 0;
   const met = goal > 0 && done >= goal;
-
-  const card = document.createElement("div");
-  card.className = "card habit" + (met ? " met" : "");
-
-  const head = document.createElement("div");
-  head.className = "hhead";
-  const name = document.createElement("span");
-  name.className = "hname";
-  name.textContent = h.name;
-  head.append(name);
-  if (h.location) {
-    const c = document.createElement("span");
-    c.className = "chip loc";
-    c.textContent = "@" + h.location;
-    head.append(c);
-  }
-  const count = document.createElement("span");
-  count.className = "hcount";
-  count.textContent = goal ? `${done} / ${goal}` : `${done}`;
-  head.append(count);
-  card.append(head);
-
-  if (goal) {
-    const bar = document.createElement("div");
-    bar.className = "hbar";
-    const fill = document.createElement("span");
-    fill.style.width = Math.min(100, Math.round((done / goal) * 100)) + "%";
-    if (met) fill.classList.add("met");
-    bar.append(fill);
-    card.append(bar);
-  }
-
-  const streak = document.createElement("div");
-  streak.className = "hsub";
-  streak.textContent = `streak ${h._streak || 0}w · best ${h._best || 0}w`;
-  card.append(streak);
-
-  const spark = document.createElement("div");
-  spark.className = "hspark";
-  for (const wk of h._spark || []) {
-    const c = document.createElement("span");
-    c.className = "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : "");
-    spark.append(c);
-  }
-  card.append(spark);
-
-  const btn = document.createElement("button");
-  btn.className = "hlog";
-  btn.textContent = met ? "✓ done this week — log another" : "＋ log a rep";
-  btn.onclick = () => logRep(h);
-  card.append(btn);
-
-  return card;
+  return el(
+    "div",
+    { class: "card habit" + (met ? " met" : "") },
+    el(
+      "div",
+      { class: "hhead" },
+      el("span", { class: "hname" }, h.name),
+      h.location && chip("@" + h.location, "loc"),
+      el("span", { class: "hcount" }, goal ? `${done} / ${goal}` : `${done}`)
+    ),
+    goal > 0 &&
+      el(
+        "div",
+        { class: "hbar" },
+        el("span", { class: met ? "met" : null, style: { width: Math.min(100, Math.round((done / goal) * 100)) + "%" } })
+      ),
+    el("div", { class: "hsub" }, `streak ${h._streak || 0}w · best ${h._best || 0}w`),
+    el(
+      "div",
+      { class: "hspark" },
+      ...(h._spark || []).map((wk) =>
+        el("span", { class: "hcell" + (wk.hit ? " hit" : wk.n ? " partial" : "") + (wk.current ? " cur" : "") })
+      )
+    ),
+    el("button", { class: "hlog", onclick: () => logRep(h) }, met ? "✓ done this week — log another" : "＋ log a rep")
+  );
 }
 
 function logRep(h) {
@@ -743,56 +717,54 @@ function toastEl(msg, actionLabel, actionFn) {
 }
 
 function addSheetEl() {
-  const wrap = document.createElement("div");
-  wrap.className = "sheet-wrap";
-  wrap.onclick = (e) => {
-    if (e.target === wrap) {
-      state.adding = false;
-      render();
-    }
-  };
-
-  const sheet = document.createElement("div");
-  sheet.className = "sheet";
-  const h = document.createElement("h2");
-  h.textContent = state.view === "today" ? "New task — today" : "New task — inbox";
-  sheet.append(h);
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = "buy milk +life due:friday";
-  input.autocapitalize = "sentences";
-  input.enterKeyHint = "done";
-  sheet.append(input);
-
-  const hint = document.createElement("div");
-  hint.className = "hint";
-  hint.textContent = "inline: +project, due:friday, sched:2026-09-20, pri:A";
-  sheet.append(hint);
-
-  const row = document.createElement("div");
-  row.className = "row2";
-  const cancel = document.createElement("button");
-  cancel.textContent = "Cancel";
-  cancel.onclick = () => {
-    state.adding = false;
-    render();
-  };
-  const ok = document.createElement("button");
-  ok.className = "primary";
-  ok.textContent = "Add";
-  ok.onclick = () => addTask(input.value);
-  row.append(cancel, ok);
-  sheet.append(row);
-
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addTask(input.value);
-    }
+  const input = el("input", {
+    type: "text",
+    placeholder: "buy milk +life due:friday",
+    autocapitalize: "sentences",
+    enterKeyHint: "done",
+    onkeydown: (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addTask(input.value);
+      }
+    },
   });
 
-  wrap.append(sheet);
+  const wrap = el(
+    "div",
+    {
+      class: "sheet-wrap",
+      onclick: (e) => {
+        if (e.target === wrap) {
+          state.adding = false;
+          render();
+        }
+      },
+    },
+    el(
+      "div",
+      { class: "sheet" },
+      el("h2", null, state.view === "today" ? "New task — today" : "New task — inbox"),
+      input,
+      el("div", { class: "hint" }, "inline: +project, due:friday, sched:2026-09-20, pri:A"),
+      el(
+        "div",
+        { class: "row2" },
+        el(
+          "button",
+          {
+            onclick: () => {
+              state.adding = false;
+              render();
+            },
+          },
+          "Cancel",
+        ),
+        el("button", { class: "primary", onclick: () => addTask(input.value) }, "Add"),
+      ),
+    ),
+  );
+
   setTimeout(() => input.focus(), 50);
   return wrap;
 }
