@@ -751,13 +751,15 @@ function renderList(main) {
   const roots = visibleRoots();
   state._flat = [];
   if (!roots.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent =
-      state.locationFilter && state.view !== "blocked"
-        ? `Nothing tagged ${LOC_LABEL[state.locationFilter] || "@" + state.locationFilter} here. "@" to change, "\\" to clear.`
-        : "Nothing here.";
-    main.append(e);
+    main.append(
+      el(
+        "div",
+        { class: "empty" },
+        state.locationFilter && state.view !== "blocked"
+          ? `Nothing tagged ${LOC_LABEL[state.locationFilter] || "@" + state.locationFilter} here. "@" to change, "\\" to clear.`
+          : "Nothing here."
+      )
+    );
     return;
   }
   // Today: overdue items float to the top under their own header
@@ -977,13 +979,14 @@ function statsEl(items) {
     cursor = P.addDays(cursor, -1);
   }
 
-  const el = document.createElement("div");
-  el.className = "stats";
-  el.append(stat(items.length, "completed"));
-  el.append(stat(streak + "d", "streak"));
-  el.append(stat(thisWeek, "this week"));
-  el.append(stat(lastWeek, "last week"));
-  return el;
+  return el(
+    "div",
+    { class: "stats" },
+    stat(items.length, "completed"),
+    stat(streak + "d", "streak"),
+    stat(thisWeek, "this week"),
+    stat(lastWeek, "last week")
+  );
 }
 
 function stat(n, label) {
@@ -1011,19 +1014,24 @@ function renderHabits(main) {
   );
   state._flat = [];
 
-  const hint = document.createElement("div");
-  hint.className = "dayhead";
-  hint.textContent =
-    "weekly goals · j/k select, then: x log · e description · g goal · L location · r rename · # archive · a new";
-  main.append(hint);
+  main.append(
+    el(
+      "div",
+      { class: "dayhead" },
+      "weekly goals · j/k select, then: x log · e description · g goal · L location · r rename · # archive · a new"
+    )
+  );
 
   if (!active.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = archived.length
-      ? "No active habits. Press a to add one, or ↵ on an archived one to bring it back."
-      : 'No habits yet. Press a to add one (e.g. "hackerrank", goal 3).';
-    main.append(e);
+    main.append(
+      el(
+        "div",
+        { class: "empty" },
+        archived.length
+          ? "No active habits. Press a to add one, or ↵ on an archived one to bring it back."
+          : 'No habits yet. Press a to add one (e.g. "hackerrank", goal 3).'
+      )
+    );
   }
 
   for (const h of active) {
@@ -1455,123 +1463,105 @@ function actionGroups() {
   return groups;
 }
 
+// one "<kbd>keys</kbd> description" row
+function kRow(keys, desc, cls) {
+  return el("div", { class: "krow" + (cls ? " " + cls : "") }, el("kbd", null, keys), el("span", null, desc));
+}
+
 // read-only list, for the ? overlay
 function keymapEl() {
-  const wrap = document.createElement("div");
-  wrap.className = "keymap";
-  for (const [group, entries] of Object.entries(actionGroups())) {
-    const h = document.createElement("h3");
-    h.textContent = group;
-    wrap.append(h);
-    for (const [name, a] of entries) {
-      const r = document.createElement("div");
-      r.className = "krow";
-      const keys = BINDINGS[name].map(keyLabel).join(" / ") || "—";
-      r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${a.label}</span>`;
-      wrap.append(r);
-    }
-  }
-  // Fixed keys sit in their own full-width band — several have long key text
-  // that reads badly squeezed into a narrow column.
-  const fixed = document.createElement("div");
-  fixed.className = "kfixed";
-  const h = document.createElement("h3");
-  h.textContent = "Fixed";
-  fixed.append(h);
-  for (const [keys, desc] of FIXED_KEYS) {
-    const r = document.createElement("div");
-    r.className = "krow";
-    r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
-    fixed.append(r);
-  }
-  wrap.append(fixed);
-  return wrap;
+  return el(
+    "div",
+    { class: "keymap" },
+    ...Object.entries(actionGroups()).flatMap(([group, entries]) => [
+      el("h3", null, group),
+      ...entries.map(([name, a]) => kRow(BINDINGS[name].map(keyLabel).join(" / ") || "—", a.label)),
+    ]),
+    // Fixed keys get their own full-width band — some have long key text.
+    el(
+      "div",
+      { class: "kfixed" },
+      el("h3", null, "Fixed"),
+      ...FIXED_KEYS.map(([keys, desc]) => kRow(keys, desc))
+    )
+  );
 }
 
 // editable version, for the Shortcuts view
 function shortcutsEditorEl() {
-  const wrap = document.createElement("div");
-  wrap.className = "keymap editor";
+  const editRow = (name, a) =>
+    el(
+      "div",
+      { class: "krow edit" + (state.capturingKey === name ? " capturing" : "") },
+      el(
+        "span",
+        { class: "kkeys" },
+        ...BINDINGS[name].map((key) =>
+          el(
+            "button",
+            {
+              class: "kbd",
+              title: "remove",
+              onclick: () => {
+                unbindKey(name, key);
+                render();
+              },
+            },
+            keyLabel(key)
+          )
+        ),
+        el(
+          "button",
+          {
+            class: "kadd",
+            onclick: () => {
+              state.capturingKey = state.capturingKey === name ? null : name;
+              render();
+            },
+          },
+          state.capturingKey === name ? "press a key…" : "＋"
+        )
+      ),
+      el("span", null, a.label)
+    );
 
-  const bar = document.createElement("div");
-  bar.className = "dayhead";
-  bar.textContent = state.capturingKey
-    ? `press a key for "${ACTIONS[state.capturingKey].label}"  ·  Esc to cancel`
-    : "click a key to remove it · + to add · saved on the server — they follow you to every browser and your phone";
-  wrap.append(bar);
-
-  for (const [group, entries] of Object.entries(actionGroups())) {
-    const h = document.createElement("h3");
-    h.textContent = group;
-    wrap.append(h);
-    for (const [name, a] of entries) {
-      const r = document.createElement("div");
-      r.className = "krow edit" + (state.capturingKey === name ? " capturing" : "");
-      const keys = document.createElement("span");
-      keys.className = "kkeys";
-      for (const key of BINDINGS[name]) {
-        const b = document.createElement("button");
-        b.className = "kbd";
-        b.textContent = keyLabel(key);
-        b.title = "remove";
-        b.onclick = () => {
-          unbindKey(name, key);
+  return el(
+    "div",
+    { class: "keymap editor" },
+    el(
+      "div",
+      { class: "dayhead" },
+      state.capturingKey
+        ? `press a key for "${ACTIONS[state.capturingKey].label}"  ·  Esc to cancel`
+        : "click a key to remove it · + to add · saved on the server — they follow you to every browser and your phone"
+    ),
+    ...Object.entries(actionGroups()).flatMap(([group, entries]) => [
+      el("h3", null, group),
+      ...entries.map(([name, a]) => editRow(name, a)),
+    ]),
+    el("h3", null, "Fixed (not editable)"),
+    ...FIXED_KEYS.map(([keys, desc]) => kRow(keys, desc)),
+    el(
+      "button",
+      {
+        class: "kreset",
+        onclick: () => {
+          resetBindings();
+          state.capturingKey = null;
           render();
-        };
-        keys.append(b);
-      }
-      const add = document.createElement("button");
-      add.className = "kadd";
-      add.textContent = state.capturingKey === name ? "press a key…" : "＋";
-      add.onclick = () => {
-        state.capturingKey = state.capturingKey === name ? null : name;
-        render();
-      };
-      keys.append(add);
-      r.append(keys);
-      const label = document.createElement("span");
-      label.textContent = a.label;
-      r.append(label);
-      wrap.append(r);
-    }
-  }
-
-  const h = document.createElement("h3");
-  h.textContent = "Fixed (not editable)";
-  wrap.append(h);
-  for (const [keys, desc] of FIXED_KEYS) {
-    const r = document.createElement("div");
-    r.className = "krow";
-    r.innerHTML = `<kbd>${keys.replace(/</g, "&lt;")}</kbd><span>${desc}</span>`;
-    wrap.append(r);
-  }
-
-  const reset = document.createElement("button");
-  reset.className = "kreset";
-  reset.textContent = "Reset all to defaults";
-  reset.onclick = () => {
-    resetBindings();
-    state.capturingKey = null;
-    render();
-  };
-  wrap.append(reset);
-
-  if (!state.demo) {
-    const demo = document.createElement("a");
-    demo.className = "demolink";
-    demo.href = "?demo";
-    demo.textContent = "Open the demo — a sandbox with every feature on display →";
-    wrap.append(demo);
-
-    const bookmarklet = document.createElement("a");
-    bookmarklet.className = "demolink";
-    bookmarklet.href = "/bookmarklet.html";
-    bookmarklet.target = "_blank";
-    bookmarklet.rel = "noopener noreferrer";
-    bookmarklet.textContent = "Get the job-posting capture bookmarklet →";
-    wrap.append(bookmarklet);
-  }
-  return wrap;
+        },
+      },
+      "Reset all to defaults"
+    ),
+    !state.demo &&
+      el("a", { class: "demolink", href: "?demo" }, "Open the demo — a sandbox with every feature on display →"),
+    !state.demo &&
+      el(
+        "a",
+        { class: "demolink", href: "/bookmarklet.html", target: "_blank", rel: "noopener noreferrer" },
+        "Get the job-posting capture bookmarklet →"
+      )
+  );
 }
 
 // ---------- shell ----------
