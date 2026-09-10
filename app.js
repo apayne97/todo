@@ -1,5 +1,6 @@
 import * as P from "./parse.js";
 import * as M from "./model.js";
+import { el } from "./dom.js";
 
 const API = "/todos";
 
@@ -533,55 +534,54 @@ function relDay(dateISO) {
 }
 
 function chip(text, cls, title) {
-  const s = document.createElement("span");
-  s.className = "chip " + (cls || "");
-  s.textContent = text;
-  if (title) s.title = title;
-  return s;
+  return el("span", { class: "chip " + (cls || ""), title: title || null }, text);
 }
 
 function rowEl(it) {
-  const row = document.createElement("div");
-  row.className =
-    "row" +
-    (it.id === state.selectedId ? " sel" : "") +
-    (it.done ? " done" : "") +
-    (it.isBlocked ? " blocked" : "");
-  row.style.paddingLeft = 10 + it.depth * 22 + "px";
-  row.dataset.id = it.id || "";
-  row.onclick = () => selectItem(it.id);
-  row.ondblclick = () => {
-    selectItem(it.id);
-    state.editing = { id: it.id, mode: "title" };
-    render();
-  };
+  const row = el("div", {
+    class:
+      "row" +
+      (it.id === state.selectedId ? " sel" : "") +
+      (it.done ? " done" : "") +
+      (it.isBlocked ? " blocked" : ""),
+    style: { paddingLeft: 10 + it.depth * 22 + "px" },
+    "data-id": it.id || "",
+    onclick: () => selectItem(it.id),
+    ondblclick: () => {
+      selectItem(it.id);
+      state.editing = { id: it.id, mode: "title" };
+      render();
+    },
+  });
 
-  const box = document.createElement("button");
-  box.className = "box";
-  box.textContent = it.done ? "✓" : it._childTotal ? `${it._childDone}/${it._childTotal}` : "";
-  box.onclick = (e) => {
-    e.stopPropagation();
-    mutate(() => P.toggleDone(state.model, it.id, todayISO()));
-  };
-  row.append(box);
+  row.append(
+    el("button", {
+      class: "box",
+      onclick: (e) => {
+        e.stopPropagation();
+        mutate(() => P.toggleDone(state.model, it.id, todayISO()));
+      },
+    }, it.done ? "✓" : it._childTotal ? `${it._childDone}/${it._childTotal}` : "")
+  );
 
   if (state.editing && state.editing.id === it.id) {
     const full = state.editing.mode === "full";
-    const inp = document.createElement("input");
-    inp.className = "edit";
-    inp.value = full ? P.itemBody(it).replace(/\s*id:\S+\s*$/, "") : it.title;
-    if (full) inp.placeholder = "title +project sched:… due:… pri:A";
-    inp.onkeydown = (e) => {
-      e.stopPropagation();
-      if (e.key === "Enter") commitEdit(it, inp.value, state.editing.mode);
-      else if (e.key === "Escape") {
-        state.editing = null;
-        render();
-      }
-    };
-    inp.onblur = () => {
-      if (!RENDERING && state.editing) commitEdit(it, inp.value, state.editing.mode);
-    };
+    const inp = el("input", {
+      class: "edit",
+      value: full ? P.itemBody(it).replace(/\s*id:\S+\s*$/, "") : it.title,
+      placeholder: full ? "title +project sched:… due:… pri:A" : null,
+      onkeydown: (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") commitEdit(it, inp.value, state.editing.mode);
+        else if (e.key === "Escape") {
+          state.editing = null;
+          render();
+        }
+      },
+      onblur: () => {
+        if (!RENDERING && state.editing) commitEdit(it, inp.value, state.editing.mode);
+      },
+    });
     row.append(inp);
     state._focusEl = inp;
     return row;
@@ -589,14 +589,8 @@ function rowEl(it) {
 
   // title + chips + note live in a body column so a long title wraps under
   // itself and the checkbox stays put at the top-left
-  const body = document.createElement("div");
-  body.className = "rowbody";
+  const body = el("div", { class: "rowbody" }, el("span", { class: "title" }, it.title || "(untitled)"));
   row.append(body);
-
-  const title = document.createElement("span");
-  title.className = "title";
-  title.textContent = it.title || "(untitled)";
-  body.append(title);
 
   for (const p of it.projects) {
     const c = chip("+" + p, "proj");
@@ -638,15 +632,16 @@ function rowEl(it) {
   if (it.link) body.append(linkChip(it.link));
   const noteText = getNote(it);
   if (noteText) {
-    const note = document.createElement("div");
-    note.className = "note";
-    note.textContent = noteText;
-    note.onclick = (e) => {
-      e.stopPropagation();
-      selectItem(it.id);
-      editNote(it);
-    };
-    body.append(note);
+    body.append(
+      el("div", {
+        class: "note",
+        onclick: (e) => {
+          e.stopPropagation();
+          selectItem(it.id);
+          editNote(it);
+        },
+      }, noteText)
+    );
   }
   return row;
 }
@@ -679,15 +674,18 @@ function linkText(url) {
 
 // a clickable 🔗 chip; clicking the label opens the URL, not the row
 function linkChip(url) {
-  const a = document.createElement("a");
-  a.className = "chip link";
-  a.textContent = "🔗 " + linkText(url);
-  a.href = /^[a-z][\w+.-]*:/i.test(url) ? url : "https://" + url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  a.title = url;
-  a.onclick = (e) => e.stopPropagation();
-  return a;
+  return el(
+    "a",
+    {
+      class: "chip link",
+      href: /^[a-z][\w+.-]*:/i.test(url) ? url : "https://" + url,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: url,
+      onclick: (e) => e.stopPropagation(),
+    },
+    "🔗 " + linkText(url)
+  );
 }
 
 // Turn "due:fri" / "sched:tomorrow" inside a typed line into ISO dates.
@@ -737,10 +735,7 @@ function selectItem(id) {
 }
 
 function sectionHeadEl(text) {
-  const h = document.createElement("div");
-  h.className = "dayhead";
-  h.textContent = text;
-  return h;
+  return el("div", { class: "dayhead" }, text);
 }
 
 function walkRows(roots, main) {
@@ -1018,10 +1013,7 @@ function statsEl(items) {
 }
 
 function stat(n, label) {
-  const s = document.createElement("div");
-  s.className = "stat";
-  s.innerHTML = `<b>${n}</b><span>${label}</span>`;
-  return s;
+  return el("div", { class: "stat" }, el("b", null, n), el("span", null, label));
 }
 
 // ---------- habits view ----------
