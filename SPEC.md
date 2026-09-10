@@ -23,7 +23,11 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
   (later): `todos-archive.md` in the same data repo.
 - **App:** single static `index.html` + `app.js` + `app.css`, no build step.
   Mobile is a separate front-end (`mobile.html` + `mobile.js` + `mobile.css`,
-  served at `/m`) — see **Mobile** below. Both share `parse.js`.
+  served at `/m`) — see **Mobile** below. Both front-ends share two pure modules:
+  `parse.js` (read/serialize `todos.md`, `computeStatus`) and `model.js`
+  (view-model helpers — `viewMatch`, `allProjects`, `isReady`, `firstDate`, …).
+  Anything DOM-free that both apps need lives in one of those, so it can't drift
+  and it's covered by `parse.test.mjs` / `model.test.mjs` (`npm test`).
 - **Server:** Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag

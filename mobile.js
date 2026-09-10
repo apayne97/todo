@@ -1,6 +1,7 @@
 // Mobile todo — a small read/complete/snooze/capture front-end over the same
 // todos.md + /todos API the desktop app uses. Shares parse.js. Keyboard-free.
 import * as P from "./parse.js";
+import * as M from "./model.js";
 
 const API = "/todos";
 const SNAP = "todo.mobile.snapshot";
@@ -249,35 +250,23 @@ function addTask(raw) {
 }
 
 // ---------- view model ----------
+// firstDate / anyDesc / allProjects / projColor and the view-match logic live in
+// model.js now (shared with the desktop app, pure, tested).
 
-function firstDate(it) {
-  const s = it._effSched ?? it.sched;
-  const d = it._effDue ?? it.due;
-  return [s, d].filter(Boolean).sort()[0] || null;
-}
-
-function matches(it, view, t) {
-  if (it.done) return false;
-  if (it._archivedProject) return false; // hidden — only shows in that project's drill-in (desktop)
-  const fd = firstDate(it);
-  if (view === "today") return !it.isBlocked && !!fd && fd <= t;
-  if (view === "inbox") return !it.isBlocked && !it.sched && !it.due && !it._effSched && !it._effDue;
-  return false;
-}
-
-function anyDesc(it, pred) {
-  return pred(it) || (it.children || []).some((c) => anyDesc(c, pred));
-}
+const firstDate = M.firstDate;
+const anyDesc = M.anyDesc;
+const allProjects = () => M.allProjects(state.model);
+const projColor = (name) => M.projColor(state.model, name);
+const matches = (it, view) => M.viewMatch(it, view, { today: todayISO(), tomorrow: tomorrowISO() });
 
 function rootsFor(view, ignoreFilter) {
-  const t = todayISO();
   const pf = ignoreFilter ? null : state.projectFilter;
   const lf = ignoreFilter ? null : state.locationFilter;
   const locOK = (x) => x._effLocation === lf; // a real filter — untagged tasks are hidden until you clear it
   return P.buildTrees(state.model.items).filter(
     (r) =>
       !r.done &&
-      matches(r, view, t) &&
+      matches(r, view) &&
       (!pf || anyDesc(r, (x) => x.projects.includes(pf))) &&
       (!lf || anyDesc(r, locOK))
   );
@@ -286,30 +275,6 @@ function rootsFor(view, ignoreFilter) {
 function countFor(view) {
   if (view === "habits") return activeHabits().filter((h) => (h._thisWeek || 0) < (h._goal || 0)).length;
   return rootsFor(view, true).length; // tab counts ignore the project filter
-}
-
-// project list for the filter — item tags + `## Projects` entries, in the
-// explicit order, minus habit names (mirrors the desktop sidebar)
-function allProjects() {
-  const s = new Set();
-  for (const it of state.model.items) for (const p of it.projects) s.add(p);
-  for (const p of state.model.projects || []) s.add(p.name);
-  for (const h of state.model.habits || []) s.delete(h.name);
-  for (const p of state.model.projects || []) if (p.archived) s.delete(p.name);
-  const ord = state.model.projectOrder || [];
-  const pos = (n) => {
-    const i = ord.indexOf(n);
-    return i < 0 ? 1e6 : i;
-  };
-  return [...s].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
-}
-
-function projColor(name) {
-  const e = (state.model.projects || []).find((p) => p.name === name);
-  if (e && e.color) return e.color;
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h} 50% 58%)`;
 }
 
 function relDay(isoStr) {

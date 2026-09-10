@@ -1,4 +1,5 @@
 import * as P from "./parse.js";
+import * as M from "./model.js";
 
 const API = "/todos";
 
@@ -407,26 +408,6 @@ function parseRepeat(v) {
   return { kind: m[1] || "+", n: Number(m[2]), u: m[3] };
 }
 
-// Effective project order: the explicit `order:` list first (state.model
-// .projectOrder, set by reorderProject), then anything unlisted, alphabetically.
-// This order drives the sidebar, the ⌃1–⌃9 mapping, the P picker and the cards.
-// active (non-archived) projects — drives the sidebar / ⌃N / P picker / cards
-function allProjects() {
-  const s = new Set();
-  for (const it of state.model.items) for (const p of it.projects) s.add(p);
-  for (const p of state.model.projects) s.add(p.name);
-  // habit tags (from logged reps) aren't projects — keep them out of the
-  // sidebar / ⌃N mapping / P picker
-  for (const h of state.model.habits || []) s.delete(h.name);
-  for (const p of state.model.projects) if (p.archived) s.delete(p.name);
-  const ord = state.model.projectOrder || [];
-  const pos = (n) => {
-    const i = ord.indexOf(n);
-    return i < 0 ? 1e6 : i;
-  };
-  return [...s].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
-}
-
 function reorderProject(name, dir) {
   const order = allProjects();
   const i = order.indexOf(name);
@@ -438,26 +419,12 @@ function reorderProject(name, dir) {
   });
 }
 
-function autoColor(name) {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h} 50% 58%)`;
-}
-
-function projColor(name) {
-  return projectEntry(name)?.color || autoColor(name);
-}
-
 // curated swatches for the color picker — spread around the wheel, tuned for the dark theme
 const SWATCHES = [
   "#e5484d", "#e5844d", "#e0c04a", "#a5c261",
   "#5ec26b", "#4dc2a8", "#4da6e5", "#6a7ee5",
   "#9b6ae5", "#c96ae5", "#e56aa8", "#8b93a1",
 ];
-
-function projectEntry(name) {
-  return state.model.projects.find((p) => p.name === name) || null;
-}
 
 function ensureProjectEntry(name) {
   let e = projectEntry(name);
@@ -522,76 +489,34 @@ function editProjectColor(name) {
 
 // ---------- filtering ----------
 
-// blockers all satisfied but the item still carries a needs: — it was gated and is now free
-function isReady(it) {
-  return (
-    !it.done &&
-    it.needs.length > 0 &&
-    it._blockedBy.length === 0 &&
-    !it._cycle &&
-    it._dangling.length === 0
-  );
-}
-
-function isOverdue(it) {
-  const s = it._effSched ?? it.sched;
-  const d = it._effDue ?? it.due;
-  return !it.done && ((s && s < todayISO()) || (d && d < todayISO()));
-}
-
-function viewMatch(it, view, t, we) {
-  if (view === "done") return it.done;
-  if (it.done) return false;
-  // an archived project's tasks vanish from every list — only its drill-in shows them
-  if (it._archivedProject) return false;
-  // effective dates (see computeStatus): a subtask inherits its parent's start,
-  // so it isn't pulled into an earlier view ahead of the task it belongs to
-  const s = it._effSched ?? it.sched;
-  const d = it._effDue ?? it.due;
-  const fd = [s, d].filter(Boolean).sort()[0] || null; // first date that matters
-  const tom = tomorrowISO();
-  // date ladder: Today (due/overdue) → Tomorrow → Upcoming (everything later,
-  // split into sections by renderList). No standalone "this week" view anymore.
-  if (view === "today") return !it.isBlocked && !!fd && fd <= t;
-  if (view === "tomorrow") return !it.isBlocked && fd === tom;
-  if (view === "upcoming") return !!fd && fd > tom;
-  if (view === "inbox") return !s && !d && !it.isBlocked;
-  if (view === "blocked") {
-    if (it.isBlocked || it._dangling.length > 0) return true;
-    // "ready" = a just-unblocked item (a dated one also shows in Today/Upcoming,
-    // but it's worth seeing here too — you just cleared its blocker).
-    return isReady(it);
-  }
-  return false;
-}
-
-function anyDesc(it, pred) {
-  return pred(it) || it.children.some((c) => anyDesc(c, pred));
-}
+// isReady / isOverdue / viewMatch / sortKey / anyDesc / allProjects / projColor /
+// autoColor / projectEntry all live in model.js now (shared, pure, tested). These
+// thin wrappers bind the current model + today so call sites stay unchanged.
+const isReady = M.isReady;
+const anyDesc = M.anyDesc;
+const sortKey = M.sortKey;
+const autoColor = M.autoColor;
+const projectEntry = (name) => M.projectEntry(state.model, name);
+const projColor = (name) => M.projColor(state.model, name);
+const allProjects = () => M.allProjects(state.model);
+const isOverdue = (it) => M.isOverdue(it, todayISO());
+const viewMatch = (it, view) => M.viewMatch(it, view, { today: todayISO(), tomorrow: tomorrowISO() });
 
 function visibleRoots() {
-  const t = todayISO();
-  const we = P.weekEndISO(t);
   const roots = P.buildTrees(state.model.items);
   const q = state.search.toLowerCase();
   // the item being edited stays visible regardless of the current filters
   const editing = (r) => state.editing && anyDesc(r, (x) => x.id === state.editing.id);
-  // location filter — date + inbox views only. A real filter: a task must carry
-  // (or inherit) this location. Untagged tasks are hidden until you clear it.
+  // location filter — a real filter: untagged tasks are hidden until you clear it
   const locOK = (x) => x._effLocation === state.locationFilter;
   const locFilterActive = state.locationFilter && state.view !== "blocked";
   return roots
-    .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view, t, we)))
+    .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view)))
     .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
     .filter((r) => editing(r) || !locFilterActive || anyDesc(r, locOK))
     .filter((r) => editing(r) || !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
     // by date, then your manual order (file order) within a date — Array.sort is stable
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
-}
-
-function sortKey(it) {
-  const ds = [it.sched, it.due].filter(Boolean).sort();
-  return ds[0] || "9999-99-99";
 }
 
 // ---------- rendering ----------
@@ -1765,14 +1690,12 @@ function render() {
 
   const side = document.createElement("nav");
   side.className = "side";
-  const t = todayISO();
-  const we = P.weekEndISO(t);
   VIEWS.forEach(([k, label], i) => {
     const b = document.createElement("button");
     b.className = "navbtn" + (state.view === k ? " on" : "");
     let count = "";
     if (!NO_COUNT.includes(k)) {
-      const n = P.buildTrees(state.model.items).filter((r) => anyDesc(r, (x) => viewMatch(x, k, t, we))).length;
+      const n = P.buildTrees(state.model.items).filter((r) => anyDesc(r, (x) => viewMatch(x, k))).length;
       if (n) count = ` ${n}`;
     }
     b.innerHTML = `<span class="nk">${i + 1}</span> ${label}<span class="nc">${count}</span>`;
