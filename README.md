@@ -104,6 +104,8 @@ Storage isn't a concern — git delta-compresses these tiny diffs to almost noth
   at the same time can't clobber each other silently.
 - Autosave commits and pushes the **`todo-data`** repo (whichever repo contains
   the `TODO_FILE`), not this one.
+- The header shows the current date and time (desktop only), so it's obvious
+  what day the app thinks it is.
 - Desktop and mobile share three DOM-free modules: `parse.js` (read/serialize
   `todos.md`), `model.js` (view-model helpers), and `dom.js` (the `el()` element
   builder). `parse.test.mjs` / `model.test.mjs` run under `node --test`.
@@ -214,6 +216,10 @@ Open `http://localhost:4444/?demo` for a read-only sandbox loaded from
 [tutorial.md](tutorial.md) — a self-guided example where each task title explains
 a feature. Changes stay in memory; reload to reset. There's a link to it on the
 Shortcuts view.
+
+`tutorial.md`'s dates are pinned to a `demo-today` marker on its first line, so
+the example doesn't slowly rot into "everything is overdue" as real time passes.
+Editing its dates? Update that marker to match — see `SPEC.md`.
 
 ## Capturing job postings
 

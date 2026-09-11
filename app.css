@@ -127,6 +127,13 @@ header h1 {
   font-weight: 600;
 }
 
+.clock {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
 .main {
   flex: 1;
   overflow-y: auto;

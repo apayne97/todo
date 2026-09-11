@@ -1,3 +1,4 @@
+<!-- demo-today: 2026-08-26 -->
 # Todos
 
 - [ ] Welcome — press ? to see every keyboard shortcut +welcome sched:2026-08-26 id:t01

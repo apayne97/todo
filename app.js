@@ -135,8 +135,28 @@ const state = {
   _lastG: 0,
 };
 
-const todayISO = () => P.iso(new Date());
-const tomorrowISO = () => P.iso(P.addDays(new Date(), 1));
+// Demo mode pins "today" to whatever date the example file was authored
+// against (see the `demo-today` marker in tutorial.md), so its overdue/today/
+// upcoming buckets never drift as real time passes — the file only needs to
+// change when someone deliberately rewrites the example.
+const todayISO = () => state.demoToday || P.iso(new Date());
+const tomorrowISO = () => P.iso(P.addDays(P.parseISO(todayISO()), 1));
+
+// In demo mode this shows the frozen example date instead of the wall clock —
+// a quiet hint for why things look overdue relative to "today".
+function clockText() {
+  if (state.demo) {
+    return state.demoToday
+      ? P.parseISO(state.demoToday).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) + " (demo date)"
+      : "";
+  }
+  const now = new Date();
+  return (
+    now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
+    " · " +
+    now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+  );
+}
 const $ = (sel, el = document) => el.querySelector(sel);
 
 // ---------- key bindings ----------
@@ -235,6 +255,7 @@ async function load() {
   if (DEMO) {
     state.demo = true;
     const text = await (await fetch("./tutorial.md")).text();
+    state.demoToday = /^<!--\s*demo-today:\s*(\d{4}-\d{2}-\d{2})\s*-->/.exec(text)?.[1] || null;
     state.model = P.parse(text);
     recompute();
     render();
@@ -368,6 +389,20 @@ async function pollDisk() {
 }
 setInterval(pollDisk, 10000);
 window.addEventListener("focus", pollDisk);
+
+// Keep the header clock live without re-rendering the whole app every tick —
+// except when the calendar day has actually rolled over, since that changes
+// which bucket (today/tomorrow/overdue) every dated item falls into.
+let _clockDay = todayISO();
+setInterval(() => {
+  if (todayISO() !== _clockDay) {
+    _clockDay = todayISO();
+    render();
+    return;
+  }
+  const c = document.querySelector(".clock");
+  if (c) c.textContent = clockText();
+}, 30000);
 
 // ---------- helpers ----------
 
@@ -1717,6 +1752,7 @@ function renderHeader() {
   } else {
     head.append(chip("synced", "synced", "your edits are saved to the server"));
   }
+  head.append(el("span", { class: "clock" }, clockText()));
   return head;
 }
 

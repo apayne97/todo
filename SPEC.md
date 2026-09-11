@@ -468,6 +468,15 @@ section, bump-chip colours, both recurrence kinds, subtask progress, a blocking
 chain, a "ready" item, a broken ref, a cycle, notes, links) and the Done section
 is dated across recent days to populate the graph.
 
+Its dates never drift: a `<!-- demo-today: YYYY-MM-DD -->` marker on the file's
+first line pins what `todayISO()` returns while `state.demo` is set, so every
+overdue/today/upcoming/streak calculation is anchored to that date instead of
+the real one — the example looks the same (one overdue task, etc.) no matter
+when it's opened. **Editing `tutorial.md`'s dates? Update this marker to
+match** — it's the file's own "as-of" date, not a separate constant to hunt
+down. The header clock shows that frozen date instead of the wall clock while
+in demo, as a hint of why things look overdue relative to it.
+
 ## Mobile (`/m`)
 
 A separate, deliberately small touch front-end — `mobile.html` / `mobile.js` /
