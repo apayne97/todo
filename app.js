@@ -348,7 +348,7 @@ function mutate(fn, opts = {}) {
   fn();
   if (!opts.reorderOnly) recompute();
   scheduleSave();
-  const paint = opts.reorderOnly ? renderMain : render;
+  const paint = () => (opts.reorderOnly ? renderMain : render)({ reveal: true });
   paint();
   // Hold the cursor's spot in the list, rather than chasing the item, when the
   // change either (a) pushed it out of view entirely (bump, done, delete…) or
@@ -361,7 +361,6 @@ function mutate(fn, opts = {}) {
     state.selectedId = state._flat[Math.min(prevIdx, state._flat.length - 1)] ?? null;
     paint();
   }
-  document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
 }
 
 function undo() {
@@ -406,13 +405,20 @@ setInterval(() => {
 
 // ---------- helpers ----------
 
+// The toast is patched in/out of the DOM directly — a full render() would
+// rebuild the list and (twice per toast) fling you back to the top.
+function paintToast() {
+  $(".toast")?.remove();
+  if (state.toastMsg) $("#app").append(el("div", { class: "toast" }, state.toastMsg));
+}
+
 function toast(msg) {
   state.toastMsg = msg;
-  render();
+  paintToast();
   clearTimeout(toast._t);
   toast._t = setTimeout(() => {
     state.toastMsg = null;
-    render();
+    paintToast();
   }, 3500);
 }
 
@@ -583,7 +589,7 @@ function rowEl(it) {
     "data-id": it.id || "",
     onclick: () => selectItem(it.id),
     ondblclick: () => {
-      selectItem(it.id);
+      state.selectedId = it.id;
       state.editing = { id: it.id, mode: "title" };
       render();
     },
@@ -658,7 +664,7 @@ function rowEl(it) {
     c.style.cursor = "pointer";
     c.onclick = (e) => {
       e.stopPropagation();
-      selectItem(it.id);
+      state.selectedId = it.id;
       state.deps = it.id;
       render();
     };
@@ -672,7 +678,7 @@ function rowEl(it) {
         class: "note",
         onclick: (e) => {
           e.stopPropagation();
-          selectItem(it.id);
+          state.selectedId = it.id;
           editNote(it);
         },
       }, noteText)
@@ -764,10 +770,20 @@ function commitEdit(it, text, mode) {
   render();
 }
 
-function selectItem(id) {
+// Move the selection highlight. Swaps the `sel` class on the existing rows
+// instead of rebuilding the page, so scroll/focus are untouched; falls back to
+// a full render for things without a row to patch (habit cards, no selection).
+function setSelection(id, { reveal = false } = {}) {
   state.selectedId = id;
-  render();
+  const main = $(".main");
+  const next = main && id && [...main.querySelectorAll("[data-id]")].find((r) => r.dataset.id === String(id));
+  if (!next) return render({ reveal });
+  main.querySelector(".sel")?.classList.remove("sel");
+  next.classList.add("sel");
+  if (reveal) next.scrollIntoView({ block: "nearest" });
 }
+
+const selectItem = (id) => setSelection(id);
 
 function sectionHeadEl(text) {
   return el("div", { class: "dayhead" }, text);
@@ -909,7 +925,7 @@ function renderDone(main) {
       main.append(
         el(
           "div",
-          { class: "row done" + (it.id === state.selectedId ? " sel" : ""), style: { paddingLeft: "10px" }, onclick: () => selectItem(it.id) },
+          { class: "row done" + (it.id === state.selectedId ? " sel" : ""), "data-id": it.id || "", style: { paddingLeft: "10px" }, onclick: () => selectItem(it.id) },
           el(
             "button",
             {
@@ -1607,15 +1623,18 @@ function paintList(main) {
 
 // rebuild only the list, not the sidebar/header — for changes that don't move
 // items between views (reordering)
-function renderMain() {
+function renderMain({ reveal = false } = {}) {
   const main = $(".main");
-  if (!main) return render();
+  if (!main) return render({ reveal });
+  const top = main.scrollTop;
   RENDERING = true;
   main.innerHTML = "";
   state._focusEl = null;
   paintList(main);
+  main.scrollTop = top;
   RENDERING = false;
   if (state._focusEl) state._focusEl.focus();
+  if (reveal) $(".row.sel")?.scrollIntoView({ block: "nearest" });
 }
 
 // one sidebar/nav button: `key` badge + label (+ optional colour dot / count)
@@ -1756,8 +1775,18 @@ function renderHeader() {
   return head;
 }
 
-function render() {
+// Rebuilding the page throws away the scrolling .main element, so remember how
+// far down it was and put it back — unless we've moved to a different view (or
+// project page), which should start at the top.
+let _scrollKey = null;
+const scrollKey = () => `${state.view}|${state.projectView || ""}`;
+
+// opts.reveal: scroll the selected row into view afterwards (keyboard moves,
+// edits that may have shuffled it) — otherwise the scroll position is left alone
+function render({ reveal = false } = {}) {
   const app = $("#app");
+  const top = $(".main") && _scrollKey === scrollKey() ? $(".main").scrollTop : 0;
+  _scrollKey = scrollKey();
   RENDERING = true; // tearing down the DOM blurs the edit input — don't treat that as a commit
   app.innerHTML = "";
   state._focusEl = null;
@@ -1767,6 +1796,7 @@ function render() {
   const main = el("div", { class: "main" });
   paintList(main);
   app.append(el("main", null, renderHeader(), main));
+  main.scrollTop = top;
 
   if (state.ask) app.append(askEl());
   if (state.picker) app.append(pickerEl());
@@ -1777,6 +1807,7 @@ function render() {
   RENDERING = false;
   if (state._focusEl) state._focusEl.focus();
   else if (state.ask) $(".ask input, .ask textarea")?.focus();
+  if (reveal) $(".row.sel")?.scrollIntoView({ block: "nearest" });
 }
 
 function askEl() {
@@ -2063,7 +2094,7 @@ function depsEl() {
             class: "depstitle",
             title: "select this task in the list",
             onclick: () => {
-              selectItem(it.id);
+              state.selectedId = it.id;
               closeDeps();
             },
           },
@@ -2113,16 +2144,13 @@ function moveSel(dir) {
   if (!flat.length) return;
   let i = flat.indexOf(state.selectedId);
   i = i < 0 ? (dir > 0 ? 0 : flat.length - 1) : Math.max(0, Math.min(flat.length - 1, i + dir));
-  state.selectedId = flat[i];
-  render();
-  document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+  setSelection(flat[i], { reveal: true });
 }
 
 function selectEdge(dir) {
   const flat = state._flat;
   if (!flat.length) return;
-  state.selectedId = dir > 0 ? flat[flat.length - 1] : flat[0];
-  render();
+  setSelection(dir > 0 ? flat[flat.length - 1] : flat[0], { reveal: true });
 }
 
 // The schedule a freshly-added task should carry, from where you're standing:
@@ -2252,9 +2280,7 @@ function createFollowUp(sel) {
   // usual next move (mark the reach-out done with x) just works
   setTimeout(() => {
     if (state.selectedId === newId) {
-      state.selectedId = origin;
-      render();
-      document.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+      setSelection(origin, { reveal: true });
     }
   }, 500);
 }
