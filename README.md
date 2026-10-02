@@ -246,3 +246,18 @@ npm test
 
 Covers the parser round-trip, date math, recurrence, dependency blocking, and
 the shared view-model helpers in `model.js`.
+
+## Development workflow
+
+Changes go through pull requests; `main` is always releasable.
+
+1. Branch off `main` (`fix/…`, `feat/…`, `chore/…`) and commit there.
+2. Open a PR into `main`. The `test` workflow runs `npm test` on it.
+3. Once it's green, squash-merge. Use a conventional-commit PR title
+   (`fix: …`, `feat: …`) — it becomes the line in the release notes.
+4. After a few merges, cut a release: tag `main` and let GitHub collate the
+   merged PRs into notes.
+
+   ```bash
+   gh release create vX.Y.Z --target main --generate-notes
+   ```
