@@ -80,6 +80,8 @@ export function isOverdue(it, today) {
 export function viewMatch(it, view, ctx) {
   if (view === "done") return it.done;
   if (it.done) return false;
+  if (view === "archive") return it._archived; // parked tasks live only here
+  if (it._archived) return false;
   if (it._archivedProject) return false; // only its project drill-in shows it
   const s = it._effSched ?? it.sched;
   const d = it._effDue ?? it.due;

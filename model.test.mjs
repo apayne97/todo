@@ -124,3 +124,27 @@ test("viewMatch: blocked view shows dated ready items; archived-project tasks va
   assert.equal(M.viewMatch(byId(m, "a1"), "today", ctx), false); // archived project — hidden
   assert.equal(M.viewMatch(byId(m, "a1"), "blocked", ctx), false);
 });
+
+test("archived tasks: round-trip, leave list views, appear only in archive (subtree too)", () => {
+  const md = [
+    "# Todos",
+    "",
+    "- [ ] parked sched:2026-09-10 archived:2026-09-01 id:a1",
+    "  - [ ] child sched:2026-09-10 id:a2",
+    "",
+    "- [ ] live sched:2026-09-10 id:b1",
+    "",
+    "## Done",
+    "",
+  ].join("\n");
+  const m = model(md);
+  const ctx = { today: "2026-09-10", tomorrow: "2026-09-11" };
+  assert.equal(P.serialize(m), md);
+  assert.equal(byId(m, "a1").archived, "2026-09-01");
+  for (const id of ["a1", "a2"]) {
+    assert.equal(M.viewMatch(byId(m, id), "today", ctx), false);
+    assert.equal(M.viewMatch(byId(m, id), "archive", ctx), true);
+  }
+  assert.equal(M.viewMatch(byId(m, "b1"), "today", ctx), true);
+  assert.equal(M.viewMatch(byId(m, "b1"), "archive", ctx), false);
+});

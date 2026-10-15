@@ -106,6 +106,7 @@ function blankItem(depth, done) {
     due: null,
     created: null,
     doneDate: null,
+    archived: null, // archive date — parked, neither done nor deleted
     repeat: null, // { kind: "+"|".", n, u }
     needs: [],
     bumps: 0,
@@ -131,6 +132,7 @@ const TOKEN_TESTS = [
   /^due:\d{4}-\d{2}-\d{2}$/,
   /^created:\d{4}-\d{2}-\d{2}$/,
   /^done:\d{4}-\d{2}-\d{2}$/,
+  /^archived:\d{4}-\d{2}-\d{2}$/,
   /^repeat:[+.]\d+[dwmy]$/,
   /^needs:[\w,-]+$/,
   /^bumps:\d+$/,
@@ -152,6 +154,7 @@ function applyToken(it, tok) {
   if ((m = /^due:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.due = m[1]; return true; }
   if ((m = /^created:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.created = m[1]; return true; }
   if ((m = /^done:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.doneDate = m[1]; return true; }
+  if ((m = /^archived:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.archived = m[1]; return true; }
   if ((m = /^repeat:([+.])(\d+)([dwmy])$/.exec(tok))) { it.repeat = { kind: m[1], n: Number(m[2]), u: m[3] }; return true; }
   if ((m = /^needs:([\w,-]+)$/.exec(tok))) { it.needs = m[1].split(",").map((s) => s.trim()).filter(Boolean); return true; }
   if ((m = /^bumps:(\d+)$/.exec(tok))) { it.bumps = Number(m[1]); return true; }
@@ -186,6 +189,7 @@ export function itemBody(it) {
   if (it.bumps) p.push(`bumps:${it.bumps}`);
   if (it.created) p.push(`created:${it.created}`);
   if (it.doneDate) p.push(`done:${it.doneDate}`);
+  if (it.archived) p.push(`archived:${it.archived}`);
   for (const e of it.extra) p.push(e);
   if (it.id) p.push(`id:${it.id}`);
   return p.join(" ");
@@ -536,6 +540,15 @@ export function computeStatus(model, todayISO) {
     for (const c of it.children) propArch(c, it._archivedProject);
   };
   for (const r of buildTrees(items)) propArch(r, false);
+
+  // Archived tasks (`archived:` token): parked out of every list view but kept in
+  // the file and findable in the Archive view / search. Archiving a parent parks
+  // its whole subtree.
+  const propTaskArch = (it, pArch) => {
+    it._archived = !it.done && (!!it.archived || pArch);
+    for (const c of it.children) propTaskArch(c, it._archived);
+  };
+  for (const r of buildTrees(items)) propTaskArch(r, false);
 }
 
 // Monday (ISO week start, Monday=0) for a Date.

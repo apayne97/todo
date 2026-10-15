@@ -96,6 +96,7 @@ clickable 🔗 chip. It's stored like the note but held separately.
 | `due:YYYY-MM-DD`  | Hard deadline (org `DEADLINE`); shown even when unscheduled     | user        |
 | `created:YYYY-MM-DD` | Creation date                                              | app         |
 | `done:YYYY-MM-DD` | Completion date                                                | app         |
+| `archived:YYYY-MM-DD` | Parked — not done, not deleted (see **Archiving tasks**)    | app (`z`)   |
 | `repeat:+Nu`      | Recur from the **scheduled** date                              | user        |
 | `repeat:.Nu`      | Recur from the **completion** date                             | user        |
 | `needs:id[,id…]`  | Blocked until those item ids are done                          | user        |
@@ -162,6 +163,7 @@ dependent task straight into title-edit without opening the overlay.
 | 7 | Habits     | weekly habit goals (progress / streak / best / 8-week sparkline), with a recurring-tasks section below |
 | 8 | Projects   | one card per project; click / `↵` opens a full editable task list for it |
 | 9 | Shortcuts  | full keyboard reference                                               |
+| 0 | Archive    | tasks parked with `z` — still searchable (`/`), `z` restores          |
 
 The date ladder is Today → Tomorrow → Upcoming (no standalone "this week" —
 it's the first section of Upcoming). "First date" = the earlier of `sched`/`due`.
@@ -194,6 +196,18 @@ but kept when overdue, so "3d over" still shows how far a task has slipped.
 
 There's no separate "bumped" view — the `⤴N` chip escalates colour instead
 (purple → amber at 3 → red at 5).
+
+## Archiving tasks
+
+`z` on a task adds `archived:<today>` to its line. It stays in the active list in
+the file (not moved under `## Done`, no `done:` date, so it never counts toward the
+Done graph) but `viewMatch` returns false for it in every list view — Today,
+Tomorrow, Upcoming, Inbox, Blocked, and both mobile tabs. It shows only in the
+**Archive** view (key `0`), where `/` search works as usual; `z` there (or anywhere
+it's visible) restores it. Archiving a parent parks its whole subtree
+(`computeStatus` sets `_archived`, inherited like `_archivedProject`). Tasks that
+`needs:` an archived task stay blocked — archiving is not completing. Completing
+an archived task un-parks it.
 
 ## Projects
 

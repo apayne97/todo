@@ -14,9 +14,10 @@ const VIEWS = [
   ["habits", "Habits"],
   ["projects", "Projects"],
   ["shortcuts", "Shortcuts"],
+  ["archive", "Archive"], // parked tasks — key 0
 ];
 
-const NO_COUNT = ["done", "habits", "projects", "shortcuts"];
+const NO_COUNT = ["done", "habits", "projects", "shortcuts", "archive"];
 
 // views where the list order is driven purely by date — changing an item's date
 // shuffles it around, so after a date edit the cursor holds its spot in the list
@@ -68,6 +69,12 @@ const ACTIONS = {
   deps: { group: "Selected item", label: "deps: waiting-on / blocking", sel: true, run: ({ sel }) => { state.deps = sel.id; state._depsTrail = []; render(); } },
   moveDown: { group: "Selected item", label: "reorder down", sel: true, run: ({ sel }) => mutate(() => reorder(sel, 1), { coalesce: "reorder", reorderOnly: true }) },
   moveUp: { group: "Selected item", label: "reorder up", sel: true, run: ({ sel }) => mutate(() => reorder(sel, -1), { coalesce: "reorder", reorderOnly: true }) },
+  archive: {
+    group: "Selected item",
+    label: "archive / unarchive (park it, keep it findable)",
+    sel: true,
+    run: ({ sel }) => toggleArchive(sel),
+  },
   del: { group: "Selected item", label: "delete", sel: true, run: ({ sel }) => mutate(() => deleteItem(sel)) },
   undo: { group: "Selected item", label: "undo", run: () => undo() },
 
@@ -89,14 +96,14 @@ const DEFAULT_BINDINGS = {
   schedMinusDay: ["["], schedPlusDay: ["]"],
   schedMinusWeek: ["{"], schedPlusWeek: ["}"],
   schedMinusMonth: ["("], schedPlusMonth: [")"],
-  moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], undo: ["u"],
+  moveDown: ["K"], moveUp: ["J"], del: ["#", "Delete"], archive: ["z"], undo: ["u"],
   add: ["a"], bulkAdd: ["A"], capture: ["c"],
   newBlocking: ["B"], newDependent: ["D"], followUp: ["F"],
 };
 
 // not rebindable — shown for reference on the Shortcuts page
 const FIXED_KEYS = [
-  ["1–9", "switch view"],
+  ["1–9, 0", "switch view (0 = Archive)"],
   ["⌃1–⌃9", "Nth project — switch the drill-in, or toggle the list filter"],
   ["g g", "jump to top"],
   ["Tab / Shift-Tab", "indent / outdent as subtask"],
@@ -808,7 +815,9 @@ function renderList(main) {
         { class: "empty" },
         state.locationFilter && state.view !== "blocked"
           ? `Nothing tagged ${LOC_LABEL[state.locationFilter] || "@" + state.locationFilter} here. "@" to change, "\\" to clear.`
-          : "Nothing here."
+          : state.view === "archive"
+            ? "Nothing archived. Press z on a task to park it here without finishing or deleting it."
+            : "Nothing here."
       )
     );
     return;
@@ -1660,7 +1669,7 @@ function renderSidebar() {
     side.append(
       navBtn({
         active: state.view === k,
-        key: i + 1,
+        key: (i + 1) % 10,
         label,
         count,
         onclick: () => {
@@ -2488,6 +2497,15 @@ function indentItem(it, dir) {
   }
 }
 
+// Park a task: it keeps its line in the file (with `archived:<date>`) but drops
+// out of every list view until restored. Neither done nor deleted; the Archive
+// view and search (/ in the Archive view) find it again.
+function toggleArchive(it) {
+  const restoring = !!it.archived || it._archived;
+  mutate(() => (it.archived = restoring ? null : todayISO()));
+  toast(restoring ? "restored from archive" : "archived — find it in Archive (0)");
+}
+
 function deleteItem(it) {
   const [i, e] = subtreeRange(it);
   state.model.items.splice(i, e - i);
@@ -2510,7 +2528,7 @@ document.addEventListener("keydown", (e) => {
     const act = state.capturingKey;
     state.capturingKey = null;
     if (k === "Escape") return render();
-    if (/^[1-9]$/.test(k) || k === "g" || k === "Tab" || k === " ") {
+    if (/^[0-9]$/.test(k) || k === "g" || k === "Tab" || k === " ") {
       toast(`${keyLabel(k)} is reserved`);
       return render();
     }
@@ -2607,8 +2625,8 @@ document.addEventListener("keydown", (e) => {
   }
 
   // view switching (not rebindable)
-  if (/^[1-9]$/.test(k) && Number(k) <= VIEWS.length) {
-    state.view = VIEWS[Number(k) - 1][0];
+  if (/^[0-9]$/.test(k) && (k === "0" ? 10 : Number(k)) <= VIEWS.length) {
+    state.view = VIEWS[(k === "0" ? 10 : Number(k)) - 1][0];
     state.projectView = null;
     state.selectedId = null;
     return render();
