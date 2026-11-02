@@ -40,7 +40,7 @@ const html = `<!doctype html>
       (most ATS sites — Greenhouse, Workday, Lever, LinkedIn — embed this for
       Google Jobs), asks you to confirm the role and company, then adds
       <code>apply to &lt;company&gt; — &lt;role&gt;</code> to <code>todos.md</code>,
-      tagged <code>+industry-job-application</code>, with the posting link, location,
+      tagged with your <code>captureTag</code> (if set), with the posting link, location,
       salary, and closing date (as <code>due:</code>) attached.</li>
   <li>If the page has no structured data, it falls back to asking for the role and
       company by hand.</li>

@@ -34,12 +34,12 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 - **Server:** Node script (`server.mjs`, stdlib `http` only, zero deps).
   - `GET /todos` → file contents + ETag (mtime)
   - `PUT /todos` → atomic write (temp file + rename), rejects on stale ETag
-  - `GET`/`PUT /config` → `todo.config.json` (UI prefs — key bindings; gitignored)
+  - `GET`/`PUT /config` → `todo.config.json` **next to `todos.md`** (key bindings, `captureTag`); synced with the data repo, PUT merges. Falls back to a legacy copy beside the code until the first save
   - `GET /` desktop app · `GET /m` mobile app
   - `TODO_PASSWORD` (env) → if set, `/todos` and `/config` require a signed cookie
     from `/login`; static assets and `/capture` stay open. Unset → no auth.
-  - `POST /capture` → `{ title, url?, due?, note? }`, appends one task tagged
-    `+industry-job-application` to the top of the active list. CORS-open (`Access-
+  - `POST /capture` → `{ title, url?, due?, note? }`, appends one task (tagged
+    `+<captureTag>` if `todo.config.json` sets one, else untagged) to the top of the active list. CORS-open (`Access-
     Control-Allow-Origin: *`) so the [job-posting bookmarklet](bookmarklet.js),
     running on whatever site the posting lives on, can call it; it can only ever
     add a well-formed line, never overwrite or delete.

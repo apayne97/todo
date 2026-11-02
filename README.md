@@ -205,6 +205,12 @@ in the sidebar); `P` for the picker, `\` clear filters / leave drill-in,
 `a` add, `A` bulk add (paste, one task per line), `c` quick-capture,
 `F` follow-up task (blocked on this, +3d), `u` undo.
 
+**Config file.** `todo.config.json` lives next to `todos.md` (in the data repo, so it
+syncs between machines) and holds settings about your data: key bindings, and
+`"captureTag": "some-project"` — the `+tag` the job-posting bookmarklet puts on
+captured tasks (none if unset). Per-machine settings (`TODO_FILE`, `TODO_LOCATION`,
+port, password, git behaviour) stay in environment variables.
+
 Most keys are **rebindable** on the Shortcuts view (`9`) — click a key to remove
 it, `＋` to add one, "Reset all to defaults". Overrides are saved on the server
 (`todo.config.json`), so they follow you to the installed app and your phone —
@@ -228,7 +234,7 @@ view) and drag the button to your bookmarks bar. On any job posting, click it: i
 reads the page's `schema.org` `JobPosting` structured data — most ATSs (Greenhouse,
 Workday, Lever, LinkedIn) embed this for Google Jobs — confirms the role/company
 with you, and adds `apply to <company> — <role>` to `todos.md`, tagged
-`+industry-job-application`, with the posting link, location, salary, and closing
+with the `captureTag` from `todo.config.json` (if you set one), with the posting link, location, salary, and closing
 date (as `due:`) in the note. Falls back to asking by hand if a page has no
 structured data.
 

@@ -28,7 +28,8 @@
 // API:
 //   GET  /todos    -> { text, etag }        etag is the file mtime
 //   PUT  /todos    body { text, etag }      412 if etag is stale, else writes atomically
-//   GET/PUT /config                         UI prefs (key bindings); gated with /todos
+//   GET/PUT /config                         todo.config.json beside todos.md (key bindings,
+//                                           captureTag); gated with /todos
 //   POST /capture  body { title, url?, due?, note? }   appends one task (see below);
 //                  CORS-open so the browser-extension/bookmarklet can call it from
 //                  any origin — it can only ever add a line to todos.md, nothing else.
@@ -37,6 +38,7 @@
 
 import { createServer } from "node:http";
 import { readFile, writeFile, rename, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, extname, normalize } from "node:path";
@@ -53,8 +55,22 @@ const argVal = (flag) => {
 
 const PORT = Number(argVal("--port") || process.env.TODO_PORT || 4444);
 const FILE = resolve(HERE, argVal("--file") || process.env.TODO_FILE || "todos.md");
-// UI prefs (currently just key bindings). Local to this machine, not committed.
-const CONFIG = resolve(HERE, "todo.config.json");
+// Settings that describe the data (key bindings, the /capture tag) live in
+// todo.config.json NEXT TO todos.md, so they sync with it across machines.
+// Machine-specific settings stay in env vars. The old location (beside the code)
+// is still read if the new file doesn't exist yet; the first save moves it over.
+const CONFIG = join(dirname(FILE), "todo.config.json");
+const LEGACY_CONFIG = resolve(HERE, "todo.config.json");
+
+async function readConfig() {
+  for (const f of [CONFIG, LEGACY_CONFIG]) {
+    try {
+      const cfg = JSON.parse(await readFile(f, "utf8"));
+      if (cfg && typeof cfg === "object" && !Array.isArray(cfg)) return cfg;
+    } catch {}
+  }
+  return {};
+}
 // both on by default — the point of this app is that todos.md is never stranded
 // on one machine. Opt out with TODO_AUTOCOMMIT=0 (all local) or TODO_AUTOPUSH=0.
 const AUTOCOMMIT = process.env.TODO_AUTOCOMMIT !== "0";
@@ -194,10 +210,12 @@ async function autosave() {
     if (repo.err) return;
     const g = (a) => run("git", ["-C", repo.stdout.trim(), ...a.filter((x) => x != null)]);
 
-    await g(["add", "--", FILE]);
-    if (!(await g(["diff", "--cached", "--quiet", "--", FILE])).err) return; // nothing changed
+    // todos.md, plus the config beside it once it exists
+    const files = [FILE, ...(existsSync(CONFIG) ? [CONFIG] : [])];
+    await g(["add", "--", ...files]);
+    if (!(await g(["diff", "--cached", "--quiet", "--", ...files])).err) return; // nothing changed
 
-    await g(["commit", "-m", `todo: autosave ${stamp()}`, "--", FILE]);
+    await g(["commit", "-m", `todo: autosave ${stamp()}`, "--", ...files]);
     if (!AUTOPUSH) return;
 
     // Push; if origin moved under us, reconcile (safely) and try once more.
@@ -326,11 +344,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/config") {
     if (req.method === "GET") {
-      let cfg = "{}";
-      try {
-        cfg = await readFile(CONFIG, "utf8");
-      } catch {}
-      return send(res, 200, cfg, { "Content-Type": MIME[".json"] });
+      return send(res, 200, JSON.stringify(await readConfig()), { "Content-Type": MIME[".json"] });
     }
     if (req.method === "PUT") {
       let payload;
@@ -339,9 +353,13 @@ const server = createServer(async (req, res) => {
       } catch {
         return send(res, 400, JSON.stringify({ error: "bad json" }), { "Content-Type": MIME[".json"] });
       }
+      // the app only sends what it owns ({keys}); merge so other settings
+      // (e.g. captureTag) survive a rebind
+      const merged = { ...(await readConfig()), ...payload };
       const tmp = CONFIG + ".tmp-" + process.pid;
-      await writeFile(tmp, JSON.stringify(payload, null, 2) + "\n", "utf8");
+      await writeFile(tmp, JSON.stringify(merged, null, 2) + "\n", "utf8");
       await rename(tmp, CONFIG);
+      scheduleCommit();
       return send(res, 200, JSON.stringify({ ok: true }), { "Content-Type": MIME[".json"] });
     }
     return send(res, 405, "method not allowed");
@@ -378,7 +396,9 @@ const server = createServer(async (req, res) => {
     const model = P.parse(text);
     const today = P.iso(new Date());
     const due = /^\d{4}-\d{2}-\d{2}$/.test(payload.due || "") ? payload.due : null;
-    let raw = `- [ ] ${title} +industry-job-application`;
+    // `captureTag` in todo.config.json (e.g. "job-applications"); none by default
+    const tag = String((await readConfig()).captureTag || "").replace(/^\+/, "");
+    let raw = `- [ ] ${title}` + (/^[\w-]+(\/[\w-]+)*$/.test(tag) ? ` +${tag}` : "");
     if (due) raw += ` due:${due}`;
     raw += ` created:${today}`;
     const it = P.parse(raw).items[0];
