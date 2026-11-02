@@ -264,6 +264,17 @@ opened from the muted **archived** section at the bottom of the Projects view.
 `#` again on an archived project restores it (open tasks reappear). The `### block`
 and `+tag` history are always kept.
 
+**Subprojects:** a project name can be a path — `+lab-work/openff-espaloma` is a
+subproject of `lab-work`. The path *is* the tag (no second tag, no `parent:` line),
+and the parent is implied. A task in a subproject counts as part of every ancestor:
+filtering or drilling into `lab-work` includes it; `lab-work/openff-espaloma` narrows.
+Subprojects inherit the parent's colour and `location:` unless they set their own, and
+archiving a parent archives them. An optional `### lab-work/openff-espaloma` block holds
+description/colour/link as usual. `allProjects()` lists the tree parent-first (siblings
+follow `order:`, `J`/`K` reorder among siblings); the sidebar and cards indent them, the
+drill-in groups tasks under a heading per subproject, and `P` offers "new subproject of …".
+Renaming a project rewrites its subprojects' tags too.
+
 **Project drill-in** (`state.projectView`, a sub-mode of the Projects view — not
 a numbered view): a full editable list of *every* task in that project — buckets
 **overdue / today / tomorrow / upcoming / no date**, and a "show done" toggle.

@@ -458,14 +458,8 @@ function parseRepeat(v) {
 }
 
 function reorderProject(name, dir) {
-  const order = allProjects();
-  const i = order.indexOf(name);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= order.length) return;
-  mutate(() => {
-    [order[i], order[j]] = [order[j], order[i]];
-    state.model.projectOrder = order;
-  });
+  const order = M.movedProjectOrder(state.model, name, dir);
+  if (order) mutate(() => (state.model.projectOrder = order));
 }
 
 // curated swatches for the color picker — spread around the wheel, tuned for the dark theme
@@ -492,7 +486,7 @@ function ensureProjectEntry(name) {
 function projectSummaries() {
   return allProjects().map((name) => {
     const e = projectEntry(name) || { name, desc: "", meta: [], link: "", color: "", location: "" };
-    const mine = state.model.items.filter((it) => it.projects.includes(name));
+    const mine = state.model.items.filter((it) => inProject(it, name));
     const open = mine.filter((i) => !i.done);
     return {
       name,
@@ -548,6 +542,9 @@ const autoColor = M.autoColor;
 const projectEntry = (name) => M.projectEntry(state.model, name);
 const projColor = (name) => M.projColor(state.model, name);
 const allProjects = () => M.allProjects(state.model);
+const { inProject, projDepth, leafName, isWithin, parentOf } = M;
+// `+old` or `+old/sub` -> the same tag under the new name
+const retag = (p, old, name) => (isWithin(p, old) ? name + p.slice(old.length) : p);
 const isOverdue = (it) => M.isOverdue(it, todayISO());
 const viewMatch = (it, view) => M.viewMatch(it, view, { today: todayISO(), tomorrow: tomorrowISO() });
 
@@ -561,7 +558,7 @@ function visibleRoots() {
   const locFilterActive = state.locationFilter && state.view !== "blocked";
   return roots
     .filter((r) => editing(r) || anyDesc(r, (x) => viewMatch(x, state.view)))
-    .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => x.projects.includes(state.projectFilter)))
+    .filter((r) => editing(r) || !state.projectFilter || anyDesc(r, (x) => inProject(x, state.projectFilter)))
     .filter((r) => editing(r) || !locFilterActive || anyDesc(r, locOK))
     .filter((r) => editing(r) || !q || anyDesc(r, (x) => x.title.toLowerCase().includes(q)))
     // by date, then your manual order (file order) within a date — Array.sort is stable
@@ -1258,13 +1255,18 @@ function deleteHabit(h) {
 function projectCardEl(p, i) {
   return el(
     "div",
-    { class: "pcard" + (p.name === state.selectedId ? " sel" : ""), onclick: () => openProjectDetail(p.name) },
+    { class: "pcard" + (projDepth(p.name) ? " sub" : "") + (p.name === state.selectedId ? " sel" : ""), onclick: () => openProjectDetail(p.name) },
     el(
       "div",
       { class: "phead" },
       el("span", { class: "pcardnum", title: i < 9 ? `⌃${i + 1} filters/opens this project` : null }, i < 9 ? `⌃${i + 1}` : ""),
       el("span", { class: "dot", style: { background: projColor(p.name) } }),
-      el("button", { class: "pname", title: "open this project", onclick: () => openProjectDetail(p.name) }, p.name),
+      el(
+        "button",
+        { class: "pname", title: "open this project", onclick: () => openProjectDetail(p.name) },
+        parentOf(p.name) && el("span", { class: "pparent" }, parentOf(p.name) + "/"),
+        leafName(p.name)
+      ),
       p.location && chip("@" + p.location, "loc"),
       el(
         "span",
@@ -1298,7 +1300,7 @@ function projectCardEl(p, i) {
 }
 
 function archivedProjectRow(p) {
-  const open = state.model.items.filter((it) => !it.done && it.projects.includes(p.name)).length;
+  const open = state.model.items.filter((it) => !it.done && inProject(it, p.name)).length;
   const when = /^\d{4}-\d{2}-\d{2}$/.test(p.archived) ? ` · archived ${relDay(p.archived)}` : "";
   return el(
     "div",
@@ -1387,6 +1389,22 @@ function goToProject(name) {
   setProjectFilter(state.projectFilter === name ? null : name);
 }
 
+function renderDateBuckets(main, open, t, tom, prefix) {
+  const buckets = [
+    ["overdue", (r) => anyDesc(r, isOverdue)],
+    ["today", (r) => !anyDesc(r, isOverdue) && sortKey(r) === t],
+    ["tomorrow", (r) => sortKey(r) === tom],
+    ["upcoming", (r) => sortKey(r) > tom && sortKey(r) !== "9999-99-99"],
+    ["no date", (r) => sortKey(r) === "9999-99-99"],
+  ];
+  for (const [label, pred] of buckets) {
+    const g = open.filter(pred);
+    if (!g.length) continue;
+    main.append(sectionHeadEl(`${prefix}${label} · ${g.length}`));
+    walkRows(g, main);
+  }
+}
+
 // Every task tagged with the project, whatever its date/status — buckets mirror
 // the nav (overdue / today / tomorrow / upcoming / no date) plus optional done.
 // Rows are normal rows: all the usual keys edit them in place.
@@ -1418,25 +1436,44 @@ function renderProjectDetail(main) {
   );
 
   const roots = P.buildTrees(state.model.items)
-    .filter((r) => anyDesc(r, (x) => x.projects.includes(name)))
+    .filter((r) => anyDesc(r, (x) => inProject(x, name)))
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const open = roots.filter((r) => anyDesc(r, (x) => !x.done));
   const doneTrees = roots.filter((r) => !anyDesc(r, (x) => !x.done));
 
-  const buckets = [
-    ["overdue", (r) => anyDesc(r, isOverdue)],
-    ["today", (r) => !anyDesc(r, isOverdue) && sortKey(r) === t],
-    ["tomorrow", (r) => sortKey(r) === tom],
-    ["upcoming", (r) => sortKey(r) > tom && sortKey(r) !== "9999-99-99"],
-    ["no date", (r) => sortKey(r) === "9999-99-99"],
-  ];
+  // Subprojects get a heading each (tasks tagged on the project itself come
+  // first, ungrouped); inside every group the usual date buckets apply.
+  const groupOf = (r) => {
+    let g = name;
+    anyDesc(r, (x) =>
+      x.projects.some((p) => {
+        if (p === name || !isWithin(p, name)) return false;
+        g = p.split("/").slice(0, projDepth(name) + 2).join("/");
+        return true;
+      })
+    );
+    return g;
+  };
+  const present = new Set(open.map(groupOf));
+  const listed = allProjects().filter((p) => present.has(p) && p !== name);
+  const groups = [name, ...listed, ...[...present].filter((p) => p !== name && !listed.includes(p))];
+  const grouped = groups.length > 1;
   let shown = 0;
-  for (const [label, pred] of buckets) {
-    const g = open.filter(pred);
-    if (!g.length) continue;
-    shown += g.length;
-    main.append(sectionHeadEl(`${label} · ${g.length}`));
-    walkRows(g, main);
+  for (const g of groups) {
+    const mine = grouped ? open.filter((r) => groupOf(r) === g) : open;
+    if (!mine.length) continue;
+    if (grouped && g !== name) {
+      main.append(
+        el(
+          "div",
+          { class: "subhead" },
+          el("span", { class: "dot", style: { background: projColor(g) } }),
+          el("button", { class: "pname", title: "open this subproject", onclick: () => openProjectDetail(g) }, "+" + g)
+        )
+      );
+    }
+    shown += mine.length;
+    renderDateBuckets(main, mine, t, tom, grouped && g !== name ? leafName(g) + " · " : "");
   }
   if (!shown) main.append(el("div", { class: "empty" }, "No open tasks in this project — press a to add one."));
   if (state.projectShowDone && doneTrees.length) {
@@ -1475,12 +1512,16 @@ function slugifyProject(v) {
   return v
     .trim()
     .replace(/^\+/, "")
-    .replace(/[^\w-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/\s*\/\s*/g, "/") // "lab-work / foo" -> a subproject path
+    .replace(/[^\w/-]+/g, "-")
+    .split("/")
+    .map((seg) => seg.replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .join("/");
 }
 
 function newProjectName(onName) {
-  ask('new project name (spaces become "-")', "", (v) => {
+  ask('new project name (spaces become "-"; "parent/sub" makes a subproject)', "", (v) => {
     const name = slugifyProject(v);
     if (name) onName(name);
   });
@@ -1494,12 +1535,12 @@ function renameProject(oldName) {
     if (!name || name === oldName) return;
     if (allProjects().includes(name)) return toast(`"${name}" already exists`);
     mutate(() => {
-      const e = projectEntry(oldName);
-      if (e) e.name = name;
+      for (const e of state.model.projects || []) e.name = retag(e.name, oldName, name);
       for (const it of state.model.items) {
-        it.projects = it.projects.map((p) => (p === oldName ? name : p));
+        it.projects = it.projects.map((p) => retag(p, oldName, name));
       }
-      if (state.projectFilter === oldName) state.projectFilter = name;
+      state.model.projectOrder = (state.model.projectOrder || []).map((p) => retag(p, oldName, name));
+      if (state.projectFilter) state.projectFilter = retag(state.projectFilter, oldName, name);
       if (state.selectedId === oldName) state.selectedId = name;
     });
   });
@@ -1647,13 +1688,13 @@ function renderMain({ reveal = false } = {}) {
 }
 
 // one sidebar/nav button: `key` badge + label (+ optional colour dot / count)
-function navBtn({ cls, active, key, label, dot, count, title, onclick }) {
+function navBtn({ cls, active, key, label, dot, count, title, onclick, depth }) {
   return el(
     "button",
     { class: "navbtn" + (cls ? " " + cls : "") + (active ? " on" : ""), title, onclick },
     el("span", { class: "nk" }, key || ""),
     dot && el("span", { class: "dot", style: { background: dot } }),
-    cls === "tiny" ? el("span", { class: "plabel" }, label) : label,
+    cls === "tiny" ? el("span", { class: "plabel", style: depth ? { marginLeft: depth * 12 + "px" } : null }, label) : label,
     count ? el("span", { class: "nc" }, ` ${count}`) : null
   );
 }
@@ -1705,7 +1746,8 @@ function renderSidebar() {
           cls: "tiny",
           active: state.projectView ? state.projectView === p : state.projectFilter === p,
           key: i < 9 ? `⌃${i + 1}` : "",
-          label: p,
+          label: leafName(p),
+          depth: projDepth(p),
           dot: projColor(p),
           title: i < 9 ? `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})` : null,
           onclick: () => goToProject(p),
@@ -2440,10 +2482,18 @@ function openSetProject(sel) {
     { value: "", label: "(no project)" },
     ...allProjects().map((p) => ({ value: p, label: p, dot: projColor(p) })),
     { value: "__new__", label: "＋ new project…", action: true, always: true },
-  ];
+    sel.projects[0] && { value: "__sub__", label: `＋ new subproject of ${sel.projects[0]}…`, action: true, always: true },
+  ].filter(Boolean);
   const cur = opts.findIndex((o) => o.value === (sel.projects[0] || ""));
   openPicker("Set project", opts, cur < 0 ? 0 : cur, (v) => {
     if (v === "__new__") return newProjectName((name) => mutate(() => (sel.projects = [name])));
+    if (v === "__sub__") {
+      const parent = sel.projects[0];
+      return ask(`new subproject of ${parent}`, "", (raw) => {
+        const leaf = slugifyProject(raw);
+        if (leaf) mutate(() => (sel.projects = [`${parent}/${leaf}`]));
+      });
+    }
     mutate(() => (sel.projects = v ? [v] : []));
   }, { numbered: true });
 }

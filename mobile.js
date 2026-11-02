@@ -257,6 +257,7 @@ function addTask(raw) {
 const firstDate = M.firstDate;
 const anyDesc = M.anyDesc;
 const allProjects = () => M.allProjects(state.model);
+const { inProject, projDepth, leafName } = M;
 const projColor = (name) => M.projColor(state.model, name);
 const matches = (it, view) => M.viewMatch(it, view, { today: todayISO(), tomorrow: tomorrowISO() });
 
@@ -268,7 +269,7 @@ function rootsFor(view, ignoreFilter) {
     (r) =>
       !r.done &&
       matches(r, view) &&
-      (!pf || anyDesc(r, (x) => x.projects.includes(pf))) &&
+      (!pf || anyDesc(r, (x) => inProject(x, pf))) &&
       (!lf || anyDesc(r, locOK))
   );
 }
@@ -370,7 +371,10 @@ function filterSheetEl() {
           { class: "projrow" + (cur === name ? " on" : ""), onclick: () => pick(name) },
           isLoc
             ? LOC_LABEL[name] || name
-            : [el("span", { class: "dot", style: { background: projColor(name) } }), name],
+            : [
+                el("span", { class: "dot", style: { background: projColor(name), marginLeft: projDepth(name) * 14 + "px" } }),
+                leafName(name),
+              ],
         ),
       ),
     ),

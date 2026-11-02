@@ -23,25 +23,93 @@ export function projectEntry(model, name) {
   return (model.projects || []).find((p) => p.name === name) || null;
 }
 
-export function projColor(model, name) {
-  return projectEntry(model, name)?.color || autoColor(name);
+// "lab-work/openff-espaloma" is a subproject of "lab-work": the path is the tag.
+export function parentOf(name) {
+  const i = String(name).lastIndexOf("/");
+  return i < 0 ? null : name.slice(0, i);
 }
 
-// Active (non-archived) project names in display order: the explicit `order:`
-// list first, then the rest alphabetically. Habit names and archived projects
-// are excluded — this drives the sidebar / ⌃N / pickers / filter sheets.
+export function projDepth(name) {
+  return String(name).split("/").length - 1;
+}
+
+// "lab-work/openff-espaloma" -> "openff-espaloma" (what the indented rows show)
+export function leafName(name) {
+  return String(name).slice(String(name).lastIndexOf("/") + 1);
+}
+
+// "a/b/c" -> ["a", "a/b", "a/b/c"]
+export function chain(name) {
+  const parts = String(name).split("/");
+  return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+}
+
+// is `name` this project or one of its descendants?
+export function isWithin(name, project) {
+  return name === project || name.startsWith(project + "/");
+}
+
+// does the task belong to `project`, directly or through a subproject?
+export function inProject(it, project) {
+  return it.projects.some((p) => isWithin(p, project));
+}
+
+// own colour, else the nearest ancestor's, else auto from the name
+export function projColor(model, name) {
+  for (const n of chain(name).reverse()) {
+    const c = projectEntry(model, n)?.color;
+    if (c) return c;
+  }
+  return autoColor(chain(name)[0]);
+}
+
+// Active (non-archived) project names in display order, as a tree flattened
+// parent-first: siblings follow the explicit `order:` list, then alphabetical.
+// A subproject implies its ancestors exist. Habit names are excluded, and so is
+// anything archived or under an archived ancestor — this drives the sidebar /
+// ⌃N / pickers / filter sheets.
 export function allProjects(model) {
   const s = new Set();
-  for (const it of model.items) for (const p of it.projects) s.add(p);
-  for (const p of model.projects || []) s.add(p.name);
+  for (const it of model.items) for (const p of it.projects) for (const n of chain(p)) s.add(n);
+  for (const p of model.projects || []) for (const n of chain(p.name)) s.add(n);
   for (const h of model.habits || []) s.delete(h.name);
-  for (const p of model.projects || []) if (p.archived) s.delete(p.name);
+  const archived = (model.projects || []).filter((p) => p.archived).map((p) => p.name);
+  for (const n of [...s]) if (archived.some((a) => isWithin(n, a))) s.delete(n);
   const ord = model.projectOrder || [];
   const pos = (n) => {
     const i = ord.indexOf(n);
     return i < 0 ? 1e6 : i;
   };
-  return [...s].sort((a, b) => pos(a) - pos(b) || a.localeCompare(b));
+  const cmp = (a, b) => {
+    const ca = chain(a);
+    const cb = chain(b);
+    for (let i = 0; i < Math.min(ca.length, cb.length); i++) {
+      if (ca[i] !== cb[i]) return pos(ca[i]) - pos(cb[i]) || ca[i].localeCompare(cb[i]);
+    }
+    return ca.length - cb.length;
+  };
+  return [...s].sort(cmp);
+}
+
+// The flat order after moving `name` one place among its siblings (subprojects
+// travel with their parent). null if it can't move that way.
+export function movedProjectOrder(model, name, dir) {
+  const flat = allProjects(model);
+  const sibs = flat.filter((n) => parentOf(n) === parentOf(name));
+  const i = sibs.indexOf(name);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= sibs.length) return null;
+  [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+  const out = [];
+  const walk = (parent) => {
+    const kids = parent === parentOf(name) ? sibs : flat.filter((x) => parentOf(x) === parent);
+    for (const n of kids) {
+      out.push(n);
+      walk(n);
+    }
+  };
+  walk(null);
+  return out;
 }
 
 // ---------- task predicates ----------

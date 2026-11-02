@@ -148,3 +148,66 @@ test("archived tasks: round-trip, leave list views, appear only in archive (subt
   assert.equal(M.viewMatch(byId(m, "b1"), "today", ctx), true);
   assert.equal(M.viewMatch(byId(m, "b1"), "archive", ctx), false);
 });
+
+const SUB_MD = [
+  "# Todos",
+  "",
+  "- [ ] a +lab-work/openff-espaloma id:a1",
+  "- [ ] b +lab-work id:b1",
+  "- [ ] c +lab-work/other id:c1",
+  "- [ ] d +life id:d1",
+  "",
+  "## Done",
+  "",
+  "## Projects",
+  "",
+  "### lab-work",
+  "color: #123456",
+  "location: work",
+  "",
+].join("\n");
+
+test("subproject tags parse and round-trip", () => {
+  const m = model(SUB_MD);
+  assert.deepEqual(byId(m, "a1").projects, ["lab-work/openff-espaloma"]);
+  assert.ok(P.serialize(m).includes("+lab-work/openff-espaloma"));
+});
+
+test("allProjects: implicit parent, parent-first tree order", () => {
+  const m = model("# Todos\n\n- [ ] a +z/sub id:a1\n- [ ] b +life id:b1\n\n## Done\n");
+  assert.deepEqual(M.allProjects(m), ["life", "z", "z/sub"]);
+  const m2 = model(SUB_MD);
+  assert.deepEqual(M.allProjects(m2), [
+    "lab-work", "lab-work/openff-espaloma", "lab-work/other", "life",
+  ]);
+});
+
+test("inProject: parent includes subprojects, sibling prefix doesn't match", () => {
+  const m = model(SUB_MD + "\n- [ ] e +lab-workshop id:e1\n");
+  const ids = (p) => m.items.filter((i) => M.inProject(i, p)).map((i) => i.id);
+  assert.deepEqual(ids("lab-work"), ["a1", "b1", "c1"]);
+  assert.deepEqual(ids("lab-work/openff-espaloma"), ["a1"]);
+});
+
+test("subproject inherits colour and location from parent", () => {
+  const m = model(SUB_MD);
+  assert.equal(M.projColor(m, "lab-work/openff-espaloma"), "#123456");
+  assert.equal(byId(m, "a1")._effLocation, "work");
+});
+
+test("archiving a parent archives its subprojects", () => {
+  const m = model(SUB_MD.replace("location: work", "archived: 2026-09-01"));
+  assert.deepEqual(M.allProjects(m), ["life"]);
+  assert.equal(byId(m, "a1")._archivedProject, true);
+});
+
+test("movedProjectOrder moves among siblings, children travel along", () => {
+  const m = model(SUB_MD);
+  assert.deepEqual(M.movedProjectOrder(m, "lab-work", 1), [
+    "life", "lab-work", "lab-work/openff-espaloma", "lab-work/other",
+  ]);
+  assert.deepEqual(M.movedProjectOrder(m, "lab-work/other", -1), [
+    "lab-work", "lab-work/other", "lab-work/openff-espaloma", "life",
+  ]);
+  assert.equal(M.movedProjectOrder(m, "lab-work", -1), null);
+});

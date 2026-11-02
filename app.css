@@ -1122,3 +1122,22 @@ button.kbd:hover {
     columns: 1;
   }
 }
+
+/* subprojects */
+.pparent {
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.pcard.sub {
+  margin-left: 24px;
+}
+
+.subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #2a2f3a);
+}

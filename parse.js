@@ -126,7 +126,7 @@ const LINK_RE = /^link:\s+(\S+)$/i;
 const COLOR_RE = /^color:\s+(\S.*)$/i;
 
 const TOKEN_TESTS = [
-  /^\+[\w-]+$/,
+  /^\+[\w-]+(?:\/[\w-]+)*$/,
   LOC_RE,
   /^sched:\d{4}-\d{2}-\d{2}$/,
   /^due:\d{4}-\d{2}-\d{2}$/,
@@ -148,7 +148,7 @@ function looksLikeToken(tok) {
 
 function applyToken(it, tok) {
   let m;
-  if ((m = /^\+([\w-]+)$/.exec(tok))) { it.projects.push(m[1]); return true; }
+  if ((m = /^\+([\w-]+(?:\/[\w-]+)*)$/.exec(tok))) { it.projects.push(m[1]); return true; }
   if ((m = LOC_RE.exec(tok))) { it.location = m[1]; return true; }
   if ((m = /^sched:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.sched = m[1]; return true; }
   if ((m = /^due:(\d{4}-\d{2}-\d{2})$/.exec(tok))) { it.due = m[1]; return true; }
@@ -518,9 +518,12 @@ export function computeStatus(model, todayISO) {
   for (const it of items) {
     it._ownLoc = it.location || null;
     if (!it._ownLoc) {
-      for (const pn of it.projects) {
-        const l = projLoc.get(pn);
-        if (l) { it._ownLoc = l; break; }
+      outer: for (const pn of it.projects) {
+        const parts = pn.split("/");
+        for (let k = parts.length; k > 0; k--) {
+          const l = projLoc.get(parts.slice(0, k).join("/"));
+          if (l) { it._ownLoc = l; break outer; }
+        }
       }
     }
   }
@@ -535,7 +538,9 @@ export function computeStatus(model, todayISO) {
   // that project's drill-in. Subtasks inherit the flag from their parent.
   const archivedProj = new Set((model.projects || []).filter((p) => p.archived).map((p) => p.name));
   const propArch = (it, pArch) => {
-    const own = it.projects.length > 0 && it.projects.every((p) => archivedProj.has(p));
+    const own =
+      it.projects.length > 0 &&
+      it.projects.every((p) => [...archivedProj].some((a) => p === a || p.startsWith(a + "/")));
     it._archivedProject = own || pArch;
     for (const c of it.children) propArch(c, it._archivedProject);
   };
