@@ -134,6 +134,7 @@ const state = {
   capturingKey: null, // action name being rebound on the Shortcuts page
   deps: null, // id of the item whose dependency tree is on screen
   _depsTrail: [], // walk history for the deps overlay
+  chord: null, // { subs } while a ⌃N → subproject digit is pending
   projectView: null, // project name — drilled-in "all tasks for this project" list
   projectShowDone: false, // include completed tasks in the project drill-in
   toastMsg: null,
@@ -543,6 +544,20 @@ const projectEntry = (name) => M.projectEntry(state.model, name);
 const projColor = (name) => M.projColor(state.model, name);
 const allProjects = () => M.allProjects(state.model);
 const { inProject, projDepth, leafName, isWithin, parentOf } = M;
+// ⌃1–⌃9 number the top-level projects only; subprojects are reached by a second key
+const topProjects = () => allProjects().filter((p) => !parentOf(p));
+const subProjects = (name) => allProjects().filter((p) => parentOf(p) === name);
+
+// ⌃N, then (within ~3s) a bare digit picks that project's Nth subproject. Recurses:
+// landing on a subproject that has children of its own arms the chord again.
+function armChord(name) {
+  clearTimeout(armChord._t);
+  const subs = subProjects(name);
+  state.chord = subs.length ? { subs } : null;
+  if (!subs.length) return;
+  toast(`+${name}: ` + subs.slice(0, 9).map((s, i) => `${i + 1} ${leafName(s)}`).join(" · "));
+  armChord._t = setTimeout(() => (state.chord = null), 3000);
+}
 // `+old` or `+old/sub` -> the same tag under the new name
 const retag = (p, old, name) => (isWithin(p, old) ? name + p.slice(old.length) : p);
 const isOverdue = (it) => M.isOverdue(it, todayISO());
@@ -1259,7 +1274,7 @@ function projectCardEl(p, i) {
     el(
       "div",
       { class: "phead" },
-      el("span", { class: "pcardnum", title: i < 9 ? `⌃${i + 1} filters/opens this project` : null }, i < 9 ? `⌃${i + 1}` : ""),
+      el("span", { class: "pcardnum", title: i >= 0 && i < 9 ? `⌃${i + 1} filters/opens this project` : null }, i >= 0 && i < 9 ? `⌃${i + 1}` : ""),
       el("span", { class: "dot", style: { background: projColor(p.name) } }),
       el(
         "button",
@@ -1328,7 +1343,8 @@ function renderProjects(main) {
     return;
   }
 
-  rows.forEach((p, i) => main.append(projectCardEl(p, i)));
+  let topN = 0;
+  rows.forEach((p) => main.append(projectCardEl(p, parentOf(p.name) ? -1 : topN++)));
 
   if (archived.length) {
     main.append(sectionHeadEl(`archived · ${archived.length}  ·  ↵ open · # restore`));
@@ -1419,7 +1435,7 @@ function renderProjectDetail(main) {
       "div",
       { class: "controls" },
       el("button", { title: "back to the project list", onclick: exitProjectDetail }, "\\ all projects"),
-      el("span", { class: "chint" }, "⌃1–⌃9 switch project"),
+      el("span", { class: "chint" }, "⌃1–⌃9 switch project, then 1–9 for a subproject"),
       el("span", { style: { flex: "1" } }),
       el(
         "button",
@@ -1740,20 +1756,22 @@ function renderSidebar() {
         },
       })
     );
-    projs.forEach((p, i) =>
+    let topN = 0;
+    projs.forEach((p) => {
+      const i = parentOf(p) ? -1 : topN++;
       side.append(
         navBtn({
           cls: "tiny",
           active: state.projectView ? state.projectView === p : state.projectFilter === p,
-          key: i < 9 ? `⌃${i + 1}` : "",
+          key: i >= 0 && i < 9 ? `⌃${i + 1}` : "",
           label: leafName(p),
           depth: projDepth(p),
           dot: projColor(p),
-          title: i < 9 ? `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})` : null,
+          title: i >= 0 && i < 9 ? `${state.projectView ? "open" : "filter by"} ${p}  (⌃${i + 1})` : null,
           onclick: () => goToProject(p),
         })
-      )
-    );
+      );
+    });
   }
 
   // location filter — always-visible; "anywhere" = off
@@ -2356,7 +2374,7 @@ function setProjectFilter(name) {
 }
 
 function openProjectFilter() {
-  // projects numbered 1..N to match ⌃1..⌃N and the sidebar; clear is last
+  // listed in tree order (subprojects indented under their parent); clear is last
   const list = allProjects();
   const opts = [
     ...list.map((p) => ({ value: p, label: p, dot: projColor(p) })),
@@ -2669,9 +2687,27 @@ document.addEventListener("keydown", (e) => {
   // list filter (matches the sidebar numbers)
   if (e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(k)) {
     e.preventDefault();
-    const p = allProjects()[Number(k) - 1];
-    if (p) goToProject(p);
+    const p = topProjects()[Number(k) - 1];
+    if (p) {
+      goToProject(p);
+      if (state.projectView === p || state.projectFilter === p) armChord(p);
+    }
     return;
+  }
+
+  // second half of the chord: a bare digit right after ⌃N picks a subproject
+  if (state.chord) {
+    const sub = !e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(k) && state.chord.subs[Number(k) - 1];
+    if (sub) {
+      e.preventDefault();
+      goToProject(sub);
+      if (state.projectView === sub || state.projectFilter === sub) armChord(sub);
+      return;
+    }
+    if (!["Control", "Shift", "Meta", "Alt"].includes(k)) {
+      state.chord = null;
+      clearTimeout(armChord._t);
+    }
   }
 
   // view switching (not rebindable)

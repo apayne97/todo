@@ -274,6 +274,8 @@ description/colour/link as usual. `allProjects()` lists the tree parent-first (s
 follow `order:`, `J`/`K` reorder among siblings); the sidebar and cards indent them, the
 drill-in groups tasks under a heading per subproject, and `P` offers "new subproject of …".
 Renaming a project rewrites its subprojects' tags too.
+`⌃1`–`⌃9` number **top-level** projects only; subprojects have no number. After `⌃N`, a bare
+`1`–`9` within ~3s picks that project's Nth subproject (a toast lists them; any other key cancels).
 
 **Project drill-in** (`state.projectView`, a sub-mode of the Projects view — not
 a numbered view): a full editable list of *every* task in that project — buckets
