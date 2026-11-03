@@ -16,7 +16,7 @@ Replaces day-to-day use of the Notion "2026 To-Do List".
 
 ## Architecture
 
-- **Ground truth:** `todos.md` in its **own repo**, `apayne97/todo-data` (private),
+- **Ground truth:** `todos.md` in its **own (private) repo**, e.g. `<you>/todo-data`,
   cloned at `~/life/todo-data`. Split out from the app repo 2026-09-08 so the
   autosave churn (dozens of commits/day) stays out of the code history. The
   server points at it via `TODO_FILE` and autosaves *that* repo. Overflow archive

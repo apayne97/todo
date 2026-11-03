@@ -4,7 +4,7 @@
   Keeps the todo server running whenever you're logged in, so it's always
   reachable at http://localhost:4444 (desktop) and over Tailscale from your phone.
 
-  Install:
+  Install (replace YOU in the paths below with your macOS username first):
     cp deploy/com.apayne.todo.plist ~/Library/LaunchAgents/
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.apayne.todo.plist
 
@@ -16,7 +16,7 @@
     launchctl kickstart -k gui/$(id -u)/com.apayne.todo
 
   Task data is a separate repo — clone it alongside this one:
-    git clone git@github.com:apayne97/todo-data.git ~/life/todo-data
+    git clone git@github.com:<you>/todo-data.git ~/life/todo-data
 
   Logs: ~/life/todo/server.log
 -->
@@ -32,13 +32,13 @@
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/apayne/life/todo</string>
+  <string>/Users/YOU/life/todo</string>
 
   <key>EnvironmentVariables</key>
   <dict>
-    <!-- ground truth lives in its own repo (apayne97/todo-data) -->
+    <!-- ground truth lives in its own repo (<you>/todo-data) -->
     <key>TODO_FILE</key>
-    <string>/Users/apayne/life/todo-data/todos.md</string>
+    <string>/Users/YOU/life/todo-data/todos.md</string>
     <key>TODO_AUTOPUSH</key>
     <string>1</string>
     <!-- this is the work Mac -> the app's location filter starts on @work.
@@ -55,8 +55,8 @@
   <true/>
 
   <key>StandardOutPath</key>
-  <string>/Users/apayne/life/todo/server.log</string>
+  <string>/Users/YOU/life/todo/server.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/apayne/life/todo/server.log</string>
+  <string>/Users/YOU/life/todo/server.log</string>
 </dict>
 </plist>

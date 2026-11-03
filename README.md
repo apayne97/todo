@@ -5,12 +5,12 @@ A local, keyboard-driven todo app. The ground truth is a plain Markdown file
 app is just a fast view over it. Full design notes in [SPEC.md](SPEC.md).
 
 **The data lives in a separate repo.** `todos.md` is in
-[`apayne97/todo-data`](https://github.com/apayne97/todo-data) (private); the
+its own repo, e.g. `<you>/todo-data` — make it **private**, it's your tasks. The
 server reads/writes it via `TODO_FILE` and autosaves *there*, keeping this repo's
-history to real code changes. Clone it alongside this one:
+history to real code changes. Create it and clone it alongside this one:
 
 ```bash
-git clone git@github.com:apayne97/todo-data.git ~/life/todo-data
+git clone git@github.com:<you>/todo-data.git ~/life/todo-data
 ```
 
 `tutorial.md` here is a self-contained example file for the demo mode.
