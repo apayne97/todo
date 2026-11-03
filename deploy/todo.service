@@ -3,7 +3,7 @@
 # Setup:
 #   sudo apt install nodejs git           # Node 18+  (check: node -v)
 #   git clone git@github.com:apayne97/todo.git ~/todo
-#   git clone git@github.com:apayne97/todo-data.git ~/todo-data   # the task data
+#   git clone git@github.com:<you>/todo-data.git ~/todo-data   # the task data
 #   mkdir -p ~/.config/systemd/user
 #   cp ~/todo/deploy/todo.service ~/.config/systemd/user/todo.service
 #   #  -> edit the paths below if you cloned elsewhere, and set a password

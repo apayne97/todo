@@ -86,8 +86,8 @@ test("a subtask's effective date is floored by its parent's schedule", () => {
     [
       "# Todos",
       "",
-      "- [ ] check finances sched:2026-09-05 id:p1",
-      "  - [ ] schwab sched:2026-08-27 id:c1",
+      "- [ ] check budget sched:2026-09-05 id:p1",
+      "  - [ ] review statement sched:2026-08-27 id:c1",
       "  - [ ] amex id:c2",
       "- [ ] loose end sched:2026-08-27 id:x1",
       "",
